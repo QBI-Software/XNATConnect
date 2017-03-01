@@ -46,3 +46,7 @@ Network Trash Folder
 Temporary Items
 .apdisk
 .idea/
+*.zip
+*.IMA
+*.dcm
+*.xml
