@@ -23,9 +23,9 @@ In your home directory (~/.) type the following commands:
 
 2. Download the scripts - these are under version control on Github
 
->git clone https://github.com/QBI-Software/XNAT_scripts/XnatConnect.git
+>git clone https://github.com/QBI-Software/XNATConnect.git
 
->cd XnatConnect
+>cd XNATConnect
 
 3. Set up your connection to the XNAT server
 
@@ -37,7 +37,7 @@ In your home directory (~/.) type the following commands:
  
  - logins for other XNAT servers can be added
  
- ** Save this file as ~/.xnat.cfg and change the permissions to Readonly to prevent others from seeing your login details
+ **Save this file as ~/.xnat.cfg and change the permissions to prevent others from seeing your login details
  
  ie -rw------- .xnat.cfg
  
@@ -48,6 +48,7 @@ In your home directory (~/.) type the following commands:
 If problems, check your script has execute permission (+x) and that the python libraries have been installed as above
 
 3. Updating scripts - ensure you have the latest version with:
+
 >git pull
 
 ## Organizing input files
