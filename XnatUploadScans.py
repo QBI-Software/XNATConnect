@@ -3,11 +3,11 @@
 XNAT Utility script: Upload scans via subject label (not XNAT id)
 where scans are loaded from structure as follows:
 /project_id/subject_label/scans/group/session_type/
-eg QBICC/1450001/scans/RAW/MRfile
+
 DICOM FILE FORMATS: dcm or Siemens IMA
 Created on Thu Feb 23 10:58:21 2017
 
-@author: uqecoop2
+@author: Liz Cooper-Williams, QBI
 """
 import ConfigParser
 import argparse
@@ -169,10 +169,11 @@ class XnatConnector:
                     if len(scan_files)==0: #check this isn't wrong dir
                         logging.warning("File directory doesn't contain dcm files:%s", uploaddir)
                         continue
+
                     scan_type = self.getScanType(default_scantype,scan_files[0])
-
-
                     scan_id = self.getSeriesNumber(subdr,scan_files[0])
+                    print 'Scan ID: %s  Scan type=%s' % (scan_id, scan_type)
+
                     scan_pi = self.getPI(scan_files[0])
                     if DEBUG or proj_pi in scan_pi or proj_pi in owners:
                         logging.info("Owner verified:  scan=%s project=%s", scan_pi, proj_pi)
@@ -181,32 +182,44 @@ class XnatConnector:
                         continue
                     #(scan_date, scan_time) = self.getSeriesDatestamp(scan_files[0])
                     scan_ctr += 1
-
-                    if scan_type != default_scantype:
-                        print 'Scan type=', scan_type
-                        others[str(scan_id)] = dcm_path
-                    else:
-                        scan = expt.scan(str(scan_id)) # The scan ID in XNAT matches the Series instance number in the dicom.
+                    scan = expt.scan(str(scan_id))
+                    #scan.insert() #Should detect type BUT IT DOESN'T
+                    if scan_type == 'MR Image Storage':
                         scan.create(scans='xnat:mrScanData')
-                        dicom_resource = scan.resource('DICOM') #crucial for display DICOM headers
-                        dicom_resource.put_dir(dcm_path,overwrite=True, extract=True)
+                    elif scan_type == 'Secondary Capture Image Storage':
+                        scan.create(scans='xnat:scScanData')
+                    else:
+                        modality = self.getModality(scan_files[0])
+                        if modality is not None and modality =='MR':
+                            scan.create(scans='xnat:otherDicomScanData')
+
+                    dicom_resource = scan.resource('DICOM') #crucial for display DICOM headers
+                    dicom_resource.put_dir(dcm_path,overwrite=True, extract=True)
+                    #Update per scan doesn't work:
+                    ## hdrs = '/REST/experiments/%s/scans/%s?pullDataFromHeaders=true' % (elabel, str(scan_id))
+                    #xnat.conn.put(hdrs)
 
                 # Update headers after files uploaded (mrScan only)
                 if expt.scans():
-                    #expt.trigger(fix_types=True, scan_headers=True, pipelines=True) - doesn't work properly so list each function as below
-                    expt.pull_data_from_headers()
+                    #expt.trigger(fix_types=True, scan_headers=True, pipelines=True) - doesn't work properly as calls are in wrong order so list each function as below
+                    try:
+                        expt.pull_data_from_headers()
+                    except:
+                        message = "Unable to extract header data from this xsi type: %s" % scan_type
+                        logging.warning(message)
                     expt.fix_scan_types()
                     expt.trigger_pipelines()
                     # mark or move folder if done
                     if donepath:
                         try:
                             shutil.move(join(scandir, slabel), donepath)
-                            message = "Completed scans moved to %s" % donepath
+                            message = "Uploaded scans moved to %s" % donepath
                             logging.info(message)
                             print message
-                        except:
-                            raise os.error
-
+                        except IOError:
+                            message = "Error in moving uploaded scans to %s" % donepath
+                            logging.warning(message)
+                            print message
 
             else:
                 logging.warning("Subject doesn't exist in this project: %s %s" ,projectcode, sid)
@@ -221,6 +234,13 @@ class XnatConnector:
 
         return type
 
+    def getModality(self, dicomfile):
+        type = None
+        dcm = dicom.read_file(dicomfile)
+        if dcm:
+            type = dcm.Modality
+
+        return type
 
     def getSeriesNumber(self, dirlabel,dicomfile):
         series = dirlabel
@@ -308,13 +328,16 @@ if __name__ == "__main__":
             # Directory structure data/subject_label/scans/session_id/*.dcm
             if isdir(uploaddir):
                 fid = xnat.upload_MRIscans(projectcode, uploaddir)
-                logging.info("Subject sessions uploaded: %d", fid)
+                if fid == 0:
+                    logging.warning('Upload not successful - 0 sessions uploaded')
+                else:
+                    logging.info("Subject sessions uploaded: %d", fid)
             else:
                 logging.warning("Directory path cannot be found: %s", uploaddir)
 
         xnat.conn.disconnect()
         logging.info("Complete")
-        print "FINISHED - see logfile for details"
+        print "FINISHED - see xnatuploadscans.log for details"
 
     else:
         logging.warning("Failed to connect")
