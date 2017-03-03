@@ -4,11 +4,17 @@
 
 1. Create separate python environment with Python v2.7
 In your home directory (~/.) type the following commands:
+
 >mkdir dev
+
 >cd dev
+
 >virtualenv --python=/usr/bin/python2 py2venv
+
 >source py2venv/bin/activate
+
 >pip install pyxnat
+
 >pip install pydicom
 
 ## Activate your python environment before running the scripts
@@ -16,20 +22,29 @@ In your home directory (~/.) type the following commands:
 >source py2venv/bin/activate
 
 2. Download the scripts - these are under version control on Github
+
 >git clone https://github.com/QBI-Software/XNAT_scripts/XnatConnect.git
+
 >cd XnatConnect
 
 3. Set up your connection to the XNAT server
+
 >nano xnat.cfg (or any other text editor)
+ 
  - Replace XXXX with your username and password for XNAT 
+ 
  - ensure the URL is also correct
+ 
  - logins for other XNAT servers can be added
+ 
  ** Save this file as ~/.xnat.cfg and change the permissions to Readonly to prevent others from seeing your login details
+ 
  ie -rw------- .xnat.cfg
  
 ## Test
 
 >python XnatUploadScripts.py --help
+
 If problems, check your script has execute permission (+x) and that the python libraries have been installed as above
 
 3. Updating scripts - ensure you have the latest version with:
@@ -53,6 +68,7 @@ where the files are mixed series
 ## Uploading scans
 
 >python XnatUploadScans.py [config-server] [project-id] --u <inputdir>
+
 eg python XnatUploadScans.py myxnat TEST_PJ00 --u <fullpath>/sortedscans
 
 If all goes well - you should see some output indicating the files have been moved to a new directory called "done".  
