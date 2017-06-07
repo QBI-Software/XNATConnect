@@ -50,3 +50,6 @@ Temporary Items
 *.IMA
 *.dcm
 *.xml
+*.pyc
+*.log
+*.csv
