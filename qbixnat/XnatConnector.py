@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import warnings
+import datetime
 from os import listdir
 from os.path import join
 
@@ -98,6 +99,48 @@ class XnatConnector:
         else:
             logging.warning("Subject not found: %s", label)
             return None
+
+    def createSubject(self,projectcode,label, subjectkwargs):
+        """
+        Create a subject in this project with the label as ID and subject parameters as key value
+        No checks made on args eg {'dob': '1949-11-06', 'gender': 'female'}
+        """
+        project = self.get_project(projectcode)
+        subject = project.subject(label)
+        subject.create()
+        if subject.exists():
+            #set attrs
+            subject.attrs.mset(subjectkwargs)
+            return subject
+        else:
+            logging.warning("Subject not created: %s", label)
+            return None
+
+    def createExperiment(self,subject,xsdtype,exptid,exptdata):
+        """
+        Creates an experiment of type xsdtype for subject with exptid and exptdata as dict
+        No checks made for correct data fields - must represent the XSD as set in the database
+        :param subject: Subject object
+        :param xsdtype: schema datatype
+        :param exptid: ID for expt
+        :param exptdata: data for expt as dict
+        :return: expt or None
+        """
+        expt = None
+        if subject is not None:
+            expt = subject.experiment(exptid).create(experiments=xsdtype)
+            if xsdtype + '/date' in exptdata:
+                expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'],"%Y.%m.%d %H:%M:%S")
+                del exptdata[xsdtype + '/date']
+            else:
+                expt_creation = datetime.datetime.now()
+            expt_creation_date = expt_creation.strftime("%Y%m%d")
+            expt_creation_time = expt_creation.strftime("%H:%M:%S")
+            expt.attrs.set('xnat:experimentData/date', expt_creation_date)
+            expt.attrs.set('xnat:experimentData/time', expt_creation_time)
+            #Add attributes
+            expt.attrs.mset(exptdata)
+        return expt
 
     def checkUniqueLabel(self, subject, label):
         prefix = label.rsplit('_', 1)[0]

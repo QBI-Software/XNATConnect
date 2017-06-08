@@ -84,6 +84,7 @@ if __name__ == "__main__":
                 print('Subject summary')
                 for sd in cantab.subjects:
                     print('ID:', sd)
+                    dob = cantab.subjects[sd]['Date of Birth'][0]
                     for i, row in cantab.subjects[sd].iterrows():
                         print(i, 'Visit:', row['Visit Identifier'], 'MOTML', row['MOTML'],'MOTSDL',row['MOTSDL'] )
 
