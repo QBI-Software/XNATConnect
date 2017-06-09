@@ -3,13 +3,15 @@ import glob
 import logging
 import os
 import sys
+import re
 import numpy as np
 from datetime import datetime
 from os import R_OK, access
 from os.path import expanduser
 from os.path import isdir, join
-
+from requests.exceptions import ConnectionError
 from qbixnat.CantabParser import CantabParser
+from qbixnat.AmunetParser import AmunetParser
 from qbixnat.XnatConnector import XnatConnector
 
 
@@ -35,6 +37,14 @@ def formatDob(orig):
     dt = datetime.strptime(orig, "%Y-%m-%d %H:%M:%S")
     return dt.strftime("%Y-%m-%d")
 
+def formatDobNumber(orig):
+    """
+    Reformats DOB string from float to yyyy-mm-dd
+    """
+    dateoffset = 693594
+    dt = datetime.fromordinal(dateoffset + int(orig))
+    return dt.strftime("%Y-%m-%d")
+
 def getInterval(orig):
     """Parses string M-00 to 0 or M-01 to 1 etc"""
     interval = int(orig[2:])
@@ -51,9 +61,9 @@ def loadMOTdata(cantabid,i,row,subject):
     :return: msg for logging
     """
     motid = "MOT_" + cantabid
-    #expt = subject.experiment(motid)
-    experiments = [e.label() for e in subject.experiments() if e.label()== motid]
-    if len(experiments)==0:
+    expt = subject.experiment(motid)
+    #experiments = [e.label() for e in subject.experiments() if e.label()== motid]
+    if not expt.exists():
         motxsd = 'opex:cantabMOT'
         visit_date = formatDateString(row['Visit Start (Local)'])
         interval = getInterval(row['Visit Identifier'])
@@ -87,9 +97,9 @@ def loadPALdata(cantabid,i,row,subject):
     :return: msg for logging
     """
     motid = "PAL_" + cantabid
-    #expt = subject.experiment(motid)
-    experiments = [e.label() for e in subject.experiments() if e.label()== motid]
-    if len(experiments)==0:
+    expt = subject.experiment(motid)
+    #experiments = [e.label() for e in subject.experiments() if e.label()== motid]
+    if not expt.exists():
         motxsd = 'opex:cantabPAL'
         visit_date = formatDateString(row['Visit Start (Local)'])
         interval = getInterval(row['Visit Identifier'])
@@ -129,9 +139,9 @@ def loadDMSdata(cantabid,i,row,subject):
     :return: msg for logging
     """
     motid = "DMS_" + cantabid
-    #expt = subject.experiment(motid)
-    experiments = [e.label() for e in subject.experiments() if e.label()== motid]
-    if len(experiments)==0:
+    expt = subject.experiment(motid)
+    #experiments = [e.label() for e in subject.experiments() if e.label()== motid]
+    if not expt.exists():
         motxsd = 'opex:cantabDMS'
         visit_date = formatDateString(row['Visit Start (Local)'])
         interval = getInterval(row['Visit Identifier'])
@@ -179,9 +189,9 @@ def loadSWMdata(cantabid,i,row,subject):
     :return: msg for logging
     """
     motid = "SWM_" + cantabid
-    #expt = subject.experiment(motid)
-    experiments = [e.label() for e in subject.experiments() if e.label()== motid]
-    if len(experiments)==0:
+    expt = subject.experiment(motid)
+    #experiments = [e.label() for e in subject.experiments() if e.label()== motid]
+    if not expt.exists():
         motxsd = 'opex:cantabSWM'
         visit_date = formatDateString(row['Visit Start (Local)'])
         interval = getInterval(row['Visit Identifier'])
@@ -212,6 +222,81 @@ def loadSWMdata(cantabid,i,row,subject):
         msg = 'SWM experiment already exists: ' + motid
     return msg
 
+def loadAMUNETdata(cantabid,i,row,subject):
+    """ Loads AMUNET sample data from CANTAB data dump
+    Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
+    :param cantabid: ID for this row of CANTAB data
+    :param i: row number of dataset
+    :param row: row with data
+    :param subject: subject to add experiment to
+    :return: msg for logging
+    """
+    motid = cantabid
+    expt = subject.experiment(motid)
+    #experiments = [e for e in subject.experiments() if e.label()== motid]
+    motxsd = 'opex:amunet'
+    #if len(experiments)==0: #new
+    if not expt.exists():
+        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+        interval = int(visit.group(1)) - 1
+
+        #two files with different columns
+        if 'AEV_Average total error' in row:
+
+            motdata = {
+                motxsd + '/interval': str(interval),
+                motxsd + '/AEVcomments': str(row['AEV_Lexical rating']),
+                motxsd + '/AEV': str(row['AEV_Average total error']),
+                motxsd + '/EV': str(row['EV_Average total error']),
+                motxsd + '/AV': str(row['AV_Average total error']),
+                motxsd + '/DV': str(row['DV_Average total error'])
+
+            }
+        else:
+            motdata = {
+                motxsd + '/interval': str(interval),
+                motxsd + '/SCScomments': str(row['SCS_Lexical rating']),
+                motxsd + '/SCS': str(row['SCS_Average total error']),
+                motxsd + '/SCD': str(row['SCD_Average total error']),
+                motxsd + '/SAS': str(row['SAS_Average total error']),
+                motxsd + '/SAD': str(row['SAD_Average total error']),
+                motxsd + '/SES': str(row['SES_Average total error']),
+                motxsd + '/SED': str(row['SED_Average total error'])
+            }
+        xnat.createExperiment(subject, motxsd, motid, motdata)
+        msg = 'Amunet experiment created:' + motid
+    #elif(len(experiments[0].xpath('opex:AEV')) > 0 and len(experiments[0].xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row): #loaded AEV data but not SCS
+    elif (len(expt.xpath('opex:AEV')) > 0 and len(expt.xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row):  # loaded AEV data but not SCS
+
+        e1 = expt
+        motdata = {
+            motxsd + '/SCScomments': str(row['SCS_Lexical rating']),
+            motxsd + '/SCS': str(row['SCS_Average total error']),
+            motxsd + '/SCD': str(row['SCD_Average total error']),
+            motxsd + '/SAS': str(row['SAS_Average total error']),
+            motxsd + '/SAD': str(row['SAD_Average total error']),
+            motxsd + '/SES': str(row['SES_Average total error']),
+            motxsd + '/SED': str(row['SED_Average total error'])
+        }
+        e1.attrs.mset(motdata)
+        msg = 'Amunet experiment updated with SCS: '+ motid
+
+    elif(len(expt.xpath('opex:SCS')) > 0 and len(expt.xpath('opex:AEV')) == 0 and 'AEV_Average total error' in row):  # loaded SCS data but not AEV
+        e1 = expt
+        motdata = {
+            motxsd + '/AEVcomments': str(row['AEV_Lexical rating']),
+            motxsd + '/AEV': str(row['AEV_Average total error']),
+            motxsd + '/EV': str(row['EV_Average total error']),
+            motxsd + '/AV': str(row['AV_Average total error']),
+            motxsd + '/DV': str(row['DV_Average total error'])
+        }
+        e1.attrs.mset(motdata)
+        msg = 'Amunet experiment updated with AEV: '+ motid
+    else:
+        msg = 'Amunet experiment already exists: ' + motid
+    return msg
+
+
 
 if __name__ == "__main__":
 
@@ -226,6 +311,8 @@ if __name__ == "__main__":
     parser.add_argument('--g', action='store', help='get XNAT ID for subject ID')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
+    parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
+    parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
     parser.add_argument('--u', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
 
@@ -250,93 +337,154 @@ if __name__ == "__main__":
     logging.info('Connected to Server:%s Project:%s', args.database, args.projectcode)
     xnat = XnatConnector(configfile, args.database)
     xnat.connect()
-    if (xnat.conn):
-        logging.info("...Connected")
-        print("Connected")
+    try:
+        testconn = xnat.conn.inspect.datatypes('xnat:subjectData')
+        if len(testconn) > 0:
+            logging.info("...Connected")
+            print("Connected")
 
-        projectcode = args.projectcode
-        if (args.subjects is not None and args.subjects):
-            logging.info("Calling List Subjects")
-            xnat.list_subjects_all(projectcode)
+            projectcode = args.projectcode
+            if (args.subjects is not None and args.subjects):
+                logging.info("Calling List Subjects")
+                xnat.list_subjects_all(projectcode)
 
-        if (args.projects is not None and args.projects):
-            logging.info("Calling List Projects")
-            projlist = xnat.list_projects()
-            for p in projlist:
-                print("Project: ", p.id())
-        if (args.g is not None and args.g):
-            subjectid = args.g
-            sid = xnat.get_subjectid_bylabel(projectcode, subjectid)
-            print("XNAT ID=%s for subject ID=%s" % (sid, subjectid))
-        if (args.u is not None and args.u):
-            uploaddir = args.u  # Top level DIR FOR SCANS
-            # Directory structure data/subject_label/scans/session_id/*.dcm
-            if isdir(uploaddir):
-                fid = xnat.upload_MRIscans(projectcode, uploaddir)
-                if fid == 0:
-                    logging.warning('Upload not successful - 0 sessions uploaded')
+            if (args.projects is not None and args.projects):
+                logging.info("Calling List Projects")
+                projlist = xnat.list_projects()
+                for p in projlist:
+                    print("Project: ", p.id())
+            if (args.g is not None and args.g):
+                subjectid = args.g
+                sid = xnat.get_subjectid_bylabel(projectcode, subjectid)
+                print("XNAT ID=%s for subject ID=%s" % (sid, subjectid))
+            if (args.u is not None and args.u):
+                uploaddir = args.u  # Top level DIR FOR SCANS
+                # Directory structure data/subject_label/scans/session_id/*.dcm
+                if isdir(uploaddir):
+                    fid = xnat.upload_MRIscans(projectcode, uploaddir)
+                    if fid == 0:
+                        logging.warning('Upload not successful - 0 sessions uploaded')
+                    else:
+                        logging.info("Subject sessions uploaded: %d", fid)
                 else:
-                    logging.info("Subject sessions uploaded: %d", fid)
-            else:
-                logging.warning("Directory path cannot be found: %s", uploaddir)
-        if (args.cantab is not None and args.cantab):
-            sheet = "RowBySession_HealthyBrains"
-            inputdir = args.cantab
-            print("Input:", inputdir)
-            if access(inputdir, R_OK):
-                seriespattern = '*.xls*'
-                try:
-                    files = glob.glob(join(inputdir, seriespattern))
-                    print("Files:", len(files))
-                    project = xnat.get_project(projectcode)
-                    for f2 in files:
-                        print("Loading", f2)
-                        cantab = CantabParser(f2, sheet)
-                        cantab.sortSubjects()
+                    logging.warning("Directory path cannot be found: %s", uploaddir)
+            if (args.cantab is not None and args.cantab):
+                sheet = "RowBySession_HealthyBrains"
+                inputdir = args.cantab
+                print("Input:", inputdir)
+                if access(inputdir, R_OK):
+                    seriespattern = '*.*'
+                    try:
+                        files = glob.glob(join(inputdir, seriespattern))
+                        print("Files:", len(files))
+                        project = xnat.get_project(projectcode)
+                        for f2 in files:
+                            print("Loading", f2)
+                            cantab = CantabParser(f2, sheet)
+                            cantab.sortSubjects()
 
-                        for sd in cantab.subjects:
-                            print('ID:', sd)
-                            sjs = [s for s in project.subjects() if s.label() == sd]
+                            for sd in cantab.subjects:
 
-                            if len(sjs)==0:
-                                #create subject in database
-                                dob = formatDob(str(cantab.subjects[sd]['Date of Birth'].iloc[0]))
-                                gender = genders()[cantab.subjects[sd]['Gender'].iloc[0]]
-                                group = str(cantab.subjects[sd]['Group'].iloc[0])
-                                skwargs = {'dob': dob, 'gender':gender, 'group':group}
-                                s = xnat.createSubject(projectcode,sd, skwargs)
-                                logging.info('Subject created: ' + sd)
-                                print('Subject created: ' + sd)
-                            else:
-                                s = sjs[0]
-                            #Load MOTdata etc PER ROW
-                            for i, row in cantab.subjects[sd].iterrows():
-                                cantabid = sd + '_' + getStringDateUTC(row['Visit Start (GMT)'])
-                                print(i, 'Visit:', row['Visit Identifier'], 'CANTAB ID', cantabid)
-                                row.replace(np.nan,'', inplace=True)
-                                #Sample
-                                msg = loadMOTdata(cantabid,i,row,s)
-                                logging.info(msg)
-                                print(msg)
-                                msg = loadPALdata(cantabid, i, row, s)
-                                logging.info(msg)
-                                print(msg)
-                                msg = loadDMSdata(cantabid, i, row, s)
-                                logging.info(msg)
-                                print(msg)
-                                msg = loadSWMdata(cantabid, i, row, s)
-                                logging.info(msg)
-                                print(msg)
+                                print('ID:', sd)
+                                sjs = [s for s in project.subjects() if s.label() == sd]
+                                s = project.subject(sd)
 
-                except:
-                    e = sys.exc_info()[0]
-                    logging.error("Unable to process:", e)
-            else:
-                logging.error("Access to data directory is denied: %s" % inputdir)
+                                if not s.exists():
+                                    #create subject in database
+                                    dob = formatDob(str(cantab.subjects[sd]['Date of Birth'].iloc[0]))
+                                    gender = genders()[cantab.subjects[sd]['Gender'].iloc[0]]
+                                    group = str(cantab.subjects[sd]['Group'].iloc[0])
+                                    skwargs = {'dob': dob, 'gender':gender, 'group':group}
+                                    s = xnat.createSubject(projectcode,sd, skwargs)
+                                    logging.info('Subject created: ' + sd)
+                                    print('Subject created: ' + sd)
+                                #else:
+                                #   s = sjs[0]
+                                #Load data PER ROW
+                                for i, row in cantab.subjects[sd].iterrows():
+                                    if args.skiprows and str(row['DMS Recommended Standard Status']) in ['NOT_RUN', 'ABORTED']:
+                                        continue
+                                    cantabid = sd + '_' + getStringDateUTC(row['Visit Start (GMT)'])
+                                    print(i, 'Visit:', row['Visit Identifier'], 'EXPT ID', cantabid)
+                                    row.replace(np.nan,'', inplace=True)
+                                    #Sample
+                                    msg = loadMOTdata(cantabid,i,row,s)
+                                    logging.info(msg)
+                                    print(msg)
+                                    msg = loadPALdata(cantabid, i, row, s)
+                                    logging.info(msg)
+                                    print(msg)
+                                    msg = loadDMSdata(cantabid, i, row, s)
+                                    logging.info(msg)
+                                    print(msg)
+                                    msg = loadSWMdata(cantabid, i, row, s)
+                                    logging.info(msg)
+                                    print(msg)
 
+                    except:
+                        e = sys.exc_info()[0]
+                        logging.error("Unable to process:", e)
+                else:
+                    logging.error("Access to data directory is denied: %s" % inputdir)
+            ###Amunet data
+            if (args.amunet is not None and args.amunet):
+                sheet = "1"
+                inputdir = args.amunet
+                print("Input:", inputdir)
+                if access(inputdir, R_OK):
+                    seriespattern = '*.*'
+                    try:
+                        files = glob.glob(join(inputdir, seriespattern))
+                        print("Files:", len(files))
+                        project = xnat.get_project(projectcode)
+                        for f2 in files:
+                            print("Loading", f2)
+                            cantab = AmunetParser(f2, sheet)
+                            cantab.sortSubjects()
+
+                            for sd in cantab.subjects:
+                                print('ID:', sd)
+                                #sjs = [s for s in project.subjects() if s.label() == sd]
+                                s = project.subject(sd)
+                                if not s.exists():
+                                    #create subject in database
+                                    dob = formatDobNumber(cantab.subjects[sd]['S_Date of birth'].iloc[0])
+                                    gender = str(cantab.subjects[sd]['S_Sex'].iloc[0]).lower()
+                                    hand = str(cantab.subjects[sd]['S_Hand'].iloc[0])
+                                    skwargs = {'dob': dob}
+                                    if gender in ['female','male']:
+                                        skwargs['gender']=gender
+                                    if hand in ['Right','Left','Ambidextrous']:
+                                        skwargs['handedness'] = hand
+                                    s = xnat.createSubject(projectcode,sd, skwargs)
+                                    logging.info('Subject created: ' + sd)
+                                    print('Subject created: ' + sd)
+                                #else:
+                                #    s = sjs[0]
+                                #Load data PER ROW
+                                for i, row in cantab.subjects[sd].iterrows():
+                                    visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+                                    cantabid = "AM_" + sd + "_" + visit.group(1)
+                                    print(i, 'Visit:', row['S_Visit'], 'EXPT ID', cantabid)
+                                    row.replace(np.nan,'', inplace=True)
+                                    #Sample
+
+                                    msg = loadAMUNETdata(cantabid,i,row,s)
+                                    logging.info(msg)
+                                    print(msg)
+
+
+                    except:
+                        e = sys.exc_info()[0]
+                        logging.error("Unable to process:", e)
+                else:
+                    logging.error("Access to data directory is denied: %s" % inputdir)
+
+            xnat.conn.disconnect()
+            logging.info("FINISHED")
+            print("FINISHED - see xnatupload.log for details")
+
+    except ConnectionError as e:
         xnat.conn.disconnect()
-        logging.info("FINISHED")
-        print("FINISHED - see xnatupload.log for details")
-
-    else:
-        logging.warning("Failed to connect")
+        logging.error("Failed to connect:", e)
+        print e

@@ -12,6 +12,8 @@ import os
 import shutil
 import warnings
 import datetime
+import argparse
+from os.path import expanduser
 from os import listdir
 from os.path import join
 
@@ -302,3 +304,58 @@ class XnatConnector:
         if dcm:
             pi = dcm.RequestedProcedureDescription  # check this field is set with Principal Investigator
         return pi
+
+    def delete_subjects_all(self,projectcode):
+        """
+        Removes all subjects from a project
+        """
+        project = self.get_project(projectcode)
+        subj = self.get_subjects(projectcode)
+        for s in subj:
+            sid = s.id()
+            print "Deleting:", s.label()," ID=",sid
+            project.subject(sid).delete()
+            if project.subject(sid).exists():
+                print "ERROR: Couldn't delete ID=", sid
+
+if __name__ == "__main__":
+    # get current user's login details (linux) or local file (windows)
+    home = expanduser("~")
+    configfile = join(home, '.xnat.cfg')
+    parser = argparse.ArgumentParser(prog='qbixnat_manager',
+        description='''\
+        XnatConnector: Script for managing data in QBI XNAT db
+         ''')
+    parser.add_argument('database', help='select database to connect to [qbixnat|irc5xnat]')
+    parser.add_argument('projectcode', help='select project by code eg QBICC')
+    parser.add_argument('--p', action='store_true', help='list projects')
+    parser.add_argument('--s', action='store_true', help='list subjects')
+    parser.add_argument('--x', action='store_true', help='delete subjects')
+    #Tests
+    args = parser.parse_args(['xnat-dev', 'TEST_PJ00', '--p']) #Preset
+
+    print args
+    xnat = XnatConnector(configfile, args.database)
+    print "Connecting to URL=", xnat.url
+    xnat.connect()
+    if (xnat.conn):
+        print "...Connected"
+        # EXAMPLE -
+        projectcode = args.projectcode  # "QBICC"
+        if (args.x is not None and args.x):
+            xnat.delete_subjects_all(projectcode)
+
+        if (args.s is not None and args.s):
+            xnat.list_subjects_all(projectcode)
+
+        if (args.p is not None and args.p):
+            projlist = xnat.list_projects()
+            for p in projlist:
+                print "Project: ", p.id()
+
+
+        xnat.conn.disconnect()
+        print("FINISHED")
+
+    else:
+        print "Failed to connect"
