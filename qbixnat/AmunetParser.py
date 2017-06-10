@@ -14,6 +14,7 @@ import argparse
 import glob
 import re
 import shutil
+from datetime import datetime
 from os import listdir, R_OK, path, mkdir, access
 from os.path import isdir, join, basename, splitext
 
@@ -52,6 +53,87 @@ class AmunetParser:
                 print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
+    def getXsd(self):
+        return 'opex:amunet'
+
+    def mapAEVdata(self, row):
+        """
+        Maps required fields from input rows
+        :param row:
+        :return:
+        """
+        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+        interval = int(visit.group(1)) - 1
+        xsd = self.getXsd()
+        data = {
+            xsd + '/interval': str(interval),
+            xsd + '/AEVcomments': str(row['AEV_Lexical rating']),
+            xsd + '/AEV': str(row['AEV_Average total error']),
+            xsd + '/EV': str(row['EV_Average total error']),
+            xsd + '/AV': str(row['AV_Average total error']),
+            xsd + '/DV': str(row['DV_Average total error'])
+
+        }
+        return data
+
+    def mapSCSdata(self,row):
+        """
+        Maps required fields from input row
+        :param self:
+        :param row:
+        :return:
+        """
+        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+        interval = int(visit.group(1)) - 1
+        xsd = self.getXsd()
+        data = {
+            xsd + '/interval': str(interval),
+            xsd + '/SCScomments': str(row['SCS_Lexical rating']),
+            xsd + '/SCS': str(row['SCS_Average total error']),
+            xsd + '/SCD': str(row['SCD_Average total error']),
+            xsd + '/SAS': str(row['SAS_Average total error']),
+            xsd + '/SAD': str(row['SAD_Average total error']),
+            xsd + '/SES': str(row['SES_Average total error']),
+            xsd + '/SED': str(row['SED_Average total error'])
+        }
+        return data
+
+    def getSubjectData(self,sd):
+        """
+        Extract subject data from input data
+        :param sd:
+        :return:
+        """
+        skwargs = {}
+        if self.subjects is not None:
+            dob = self.formatDobNumber(self.subjects[sd]['S_Date of birth'].iloc[0])
+            gender = str(self.subjects[sd]['S_Sex'].iloc[0]).lower()
+            hand = str(self.subjects[sd]['S_Hand'].iloc[0])
+            skwargs = {'dob': dob}
+            if gender in ['female', 'male']:
+                skwargs['gender'] = gender
+            if hand in ['Right', 'Left', 'Ambidextrous']:
+                skwargs['handedness'] = hand
+
+        return skwargs
+
+    def getSampleid(self,sd, row):
+        """
+        Generate a unique id for Amunet sample
+        :param row:
+        :return:
+        """
+        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+        id = "AM_" + sd + "_" + visit.group(1)
+        return id
+
+    def formatDobNumber(self,orig):
+        """
+        Reformats DOB string from Amunet data float to yyyy-mm-dd
+        """
+        dateoffset = 693594
+        dt = datetime.fromordinal(dateoffset + int(orig))
+        return dt.strftime("%Y-%m-%d")
 
 ########################################################################
 
