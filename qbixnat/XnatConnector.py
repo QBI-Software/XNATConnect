@@ -4,21 +4,21 @@ XNAT connector class for scripts
 
 @author: Liz Cooper-Williams, QBI
 """
-from configobj import ConfigObj
+import argparse
 import csv
 import glob
 import logging
 import os
 import shutil
 import warnings
-import datetime
-import argparse
-from os.path import expanduser
 from os import listdir
+from os.path import expanduser
 from os.path import join
 
+import datetime
 import dicom
 import pyxnat
+from configobj import ConfigObj
 
 warnings.filterwarnings("ignore")
 DEBUG = 1
@@ -318,6 +318,7 @@ class XnatConnector:
             if project.subject(sid).exists():
                 print "ERROR: Couldn't delete ID=", sid
 
+############################################################################################
 if __name__ == "__main__":
     # get current user's login details (linux) or local file (windows)
     home = expanduser("~")

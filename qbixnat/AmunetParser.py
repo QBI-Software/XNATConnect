@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Utility script: AmunetParser
-Reads an excel or csv file with CANTAB data and extracts per subject
+Reads an excel or csv file with data and extracts per subject
 run from console/terminal with (example):
->python AmunetParser.py --filedir "data" --output "output.xlsx" --sheet "Sheetname_to_extract"
+>python AmunetParser.py --filedir "data" --sheet "Sheetname_to_extract"
 
 Created on Thu Mar 2 2017
 
@@ -49,7 +49,7 @@ class AmunetParser:
         if self.data is not None:
             ids = self.data['S_Full name'].unique()
             for sid in ids:
-                self.subjects[sid.upper()] = self.data[self.data['S_Full name'] == sid]
+                self.subjects[sid] = self.data[self.data['S_Full name'] == sid]
                 print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
@@ -138,13 +138,12 @@ class AmunetParser:
 ########################################################################
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Parse Excel Files',
+    parser = argparse.ArgumentParser(prog='Parse Water Maze (Amunet) Files',
                                      description='''\
-            Reads a directory and extracts data ready to load to XNAT database
+            Reads files in a directory and extracts data ready to load to XNAT database
 
              ''')
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\cantab")
-    parser.add_argument('--report', action='store', help='Report to text file', default="..\\report.txt")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="1")
     args = parser.parse_args()
 
@@ -154,7 +153,7 @@ if __name__ == "__main__":
     print("Input:", inputdir)
     if access(inputdir, R_OK):
         seriespattern = '*.*'
-        #writer = pandas.ExcelWriter(outputfile, engine='xlsxwriter')
+
         try:
             files = glob.glob(join(inputdir, seriespattern))
             print("Files:", len(files))
@@ -175,8 +174,6 @@ if __name__ == "__main__":
 
         except:
             raise OSError
-        #print("Files extracted to: ", outputfile)
-        #writer.save()
-        #writer.close()
+
     else:
         print("Cannot access directory: ", inputdir)

@@ -3,7 +3,7 @@
 Utility script: CantabParser
 Reads an excel or csv file with CANTAB data and extracts per subject
 run from console/terminal with (example):
->python CantabParser.py --filedir "data" --output "output.xlsx" --sheet "Sheetname_to_extract"
+>python CantabParser.py --filedir "data" --sheet "Sheetname_to_extract"
 
 Created on Thu Mar 2 2017
 
@@ -49,7 +49,7 @@ class CantabParser:
         if self.data is not None:
             ids = self.data['Participant ID'].unique()
             for sid in ids:
-                self.subjects[sid.upper()] = self.data[self.data['Participant ID'] == sid]
+                self.subjects[sid] = self.data[self.data['Participant ID'] == sid]
                 print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
@@ -208,7 +208,7 @@ class CantabParser:
             xsd + '/sample_id': str(i),  # row number in this data file for reference
             xsd + '/sample_num': '0',  # ie repeat runs - may need to fix later
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
-            xsd + '/status': str(row['SWM Recommended Standard Status']),
+            xsd + '/status': str(row['SWM Recommended standard Status']),
             xsd + '/comments': comments,
             xsd + '/SWMBE': str(row['SWMBE']),
             xsd + '/SWMBE6': str(row['SWMBE6']),
@@ -238,13 +238,12 @@ class CantabParser:
 ########################################################################
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Parse Excel Files',
+    parser = argparse.ArgumentParser(prog='Parse CANTAB Files',
                                      description='''\
-            Reads a directory and extracts sheet into an output file
+            Reads files in a directory and extracts data for upload to XNAT
 
              ''')
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\cantab")
-    parser.add_argument('--output', action='store', help='Output file name with full path', default="..\\output.xlsx")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract',
                         default="RowBySession_HealthyBrains")
     args = parser.parse_args()
@@ -254,8 +253,7 @@ if __name__ == "__main__":
     sheet = args.sheet
     print("Input:", inputdir)
     if access(inputdir, R_OK):
-        seriespattern = '*.xls*'
-        #writer = pandas.ExcelWriter(outputfile, engine='xlsxwriter')
+        seriespattern = '*.*'
         try:
             files = glob.glob(join(inputdir, seriespattern))
             print("Files:", len(files))
@@ -276,8 +274,6 @@ if __name__ == "__main__":
 
         except:
             raise OSError
-        #print("Files extracted to: ", outputfile)
-        #writer.save()
-        #writer.close()
+
     else:
         print("Cannot access directory: ", inputdir)

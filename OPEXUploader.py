@@ -82,22 +82,22 @@ class OPEXUploader():
 
             #two files with different columns merged to one
             if 'AEV_Average total error' in row:
-                motdata = amparser.mapAEVdata()
+                motdata = amparser.mapAEVdata(row)
             else:
-                motdata = amparser.mapSCSdata()
+                motdata = amparser.mapSCSdata(row)
             self.xnat.createExperiment(subject, motxsd, motid, motdata)
             msg = 'Amunet experiment created:' + motid
 
         elif (len(expt.xpath('opex:AEV')) > 0 and len(expt.xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row):  # loaded AEV data but not SCS
 
             e1 = expt
-            motdata = amparser.mapSCSdata()
+            motdata = amparser.mapSCSdata(row)
             e1.attrs.mset(motdata)
             msg = 'Amunet experiment updated with SCS: '+ motid
 
         elif(len(expt.xpath('opex:SCS')) > 0 and len(expt.xpath('opex:AEV')) == 0 and 'AEV_Average total error' in row):  # loaded SCS data but not AEV
             e1 = expt
-            motdata = amparser.mapAEVdata()
+            motdata = amparser.mapAEVdata(row)
             e1.attrs.mset(motdata)
             msg = 'Amunet experiment updated with AEV: '+ motid
         else:
@@ -124,8 +124,8 @@ if __name__ == "__main__":
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--u', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
-
-    uploader = OPEXUploader(parser.parse_args())
+    args = parser.parse_args()
+    uploader = OPEXUploader(args)
     uploader.config()
     uploader.xnatconnect()
     logging.info('Connecting to Server:%s Project:%s', uploader.args.database, uploader.args.projectcode)
@@ -135,12 +135,15 @@ if __name__ == "__main__":
         if len(testconn) > 0:
             logging.info("...Connected")
             print("Connected")
-
+            #Check project code is correct
             projectcode = uploader.args.projectcode
+            p = uploader.xnat.get_project(projectcode)
+            if (not p.exists()):
+                msg = "This project [%s] does not exist in this database [%s]" % (projectcode, uploader.args.database)
+                raise ConnectionError(msg)
             if (uploader.args.subjects is not None and uploader.args.subjects):
                 logging.info("Calling List Subjects")
                 uploader.xnat.list_subjects_all(projectcode)
-
             if (uploader.args.projects is not None and uploader.args.projects):
                 logging.info("Calling List Projects")
                 projlist = uploader.xnat.list_projects()
@@ -156,11 +159,13 @@ if __name__ == "__main__":
                 if isdir(uploaddir):
                     fid = uploader.xnat.upload_MRIscans(projectcode, uploaddir)
                     if fid == 0:
-                        logging.warning('Upload not successful - 0 sessions uploaded')
+                        msg = 'Upload not successful - 0 sessions uploaded'
+                        raise ValueError(msg)
                     else:
                         logging.info("Subject sessions uploaded: %d", fid)
                 else:
-                    logging.warning("Directory path cannot be found: %s", uploaddir)
+                    msg = "Directory path cannot be found: %s" % uploaddir
+                    raise IOError(msg)
             if (uploader.args.cantab is not None and uploader.args.cantab):
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
@@ -177,20 +182,18 @@ if __name__ == "__main__":
                             cantab.sortSubjects()
 
                             for sd in cantab.subjects:
-
                                 print('ID:', sd)
-                                sjs = [s for s in project.subjects() if s.label() == sd]
                                 s = project.subject(sd)
-
-                                if uploader.args.create is not None and uploader.args.create and not s.exists():
-                                    #create subject in database
-                                    skwargs = cantab.getSubjectData(sd)
-                                    s = uploader.xnat.createSubject(projectcode,sd, skwargs)
-                                    logging.info('Subject created: ' + sd)
-                                    print('Subject created: ' + sd)
-                                else:
-                                    logging.warning('Subject does not exist - skipping:' + sd)
-                                    continue
+                                if not s.exists():
+                                    if uploader.args.create is not None and uploader.args.create:
+                                        #create subject in database
+                                        skwargs = cantab.getSubjectData(sd)
+                                        s = uploader.xnat.createSubject(projectcode,sd, skwargs)
+                                        logging.info('Subject created: ' + sd)
+                                        print('Subject created: ' + sd)
+                                    else:
+                                        logging.warning('Subject does not exist - skipping:' + sd)
+                                        continue
                                 #Load data PER ROW
                                 for i, row in cantab.subjects[sd].iterrows():
                                     if uploader.args.skiprows is not None and uploader.args.skiprows and str(row['DMS Recommended Standard Status']) in ['NOT_RUN', 'ABORTED']:
@@ -222,9 +225,11 @@ if __name__ == "__main__":
 
                     except:
                         e = sys.exc_info()[0]
-                        logging.error("Unable to process:", e)
+                        raise ValueError(e)
+
                 else:
-                    logging.error("Access to data directory is denied: %s" % inputdir)
+                    msg = "Access to data directory is denied: %s" % inputdir
+                    raise ConnectionError(msg)
             ###Amunet data
             if (uploader.args.amunet is not None and uploader.args.amunet):
                 sheet = "1"
@@ -244,36 +249,44 @@ if __name__ == "__main__":
                             for sd in cantab.subjects:
                                 print('ID:', sd)
                                 s = project.subject(sd)
-                                if uploader.args.create is not None and uploader.args.create and not s.exists():
-                                    #create subject in database
-                                    skwargs = cantab.getSubjectData(sd)
-                                    s = uploader.xnat.createSubject(projectcode,sd, skwargs)
-                                    logging.info('Subject created: ' + sd)
-                                    print('Subject created: ' + sd)
-                                else:
-                                    logging.warning('Subject does not exist - skipping:' + sd)
-                                    continue
+                                if not s.exists():
+                                    if uploader.args.create is not None and uploader.args.create:
+                                        #create subject in database
+                                        skwargs = cantab.getSubjectData(sd)
+                                        s = uploader.xnat.createSubject(projectcode,sd, skwargs)
+                                        logging.info('Subject created: ' + sd)
+                                        print('Subject created: ' + sd)
+                                    else:
+                                        logging.warning('Subject does not exist - skipping:' + sd)
+                                        continue
                                 #Load data PER ROW
                                 for i, row in cantab.subjects[sd].iterrows():
-                                    cantabid = cantab.getSampleid(row)
+                                    cantabid = cantab.getSampleid(sd,row)
                                     print(i, 'Visit:', row['S_Visit'], 'EXPT ID', cantabid)
                                     row.replace(np.nan,'', inplace=True)
                                     msg = uploader.loadAMUNETdata(cantabid,row,s,cantab)
                                     logging.info(msg)
                                     print(msg)
 
-
                     except:
                         e = sys.exc_info()[0]
-                        logging.error("Unable to process:", e)
+                        raise ValueError(e)
                 else:
-                    logging.error("Access to data directory is denied: %s" % inputdir)
-
-                    uploader.xnatdisconnect()
-            logging.info("FINISHED")
-            print("FINISHED - see xnatupload.log for details")
-
+                    raise IOError(msg)
+        else:
+            raise ConnectionError("Connection failed - check config")
+    except IOError as e:
+        logging.error("Failed IO:"+ e.message)
+        print "Failed IO:", e.message
     except ConnectionError as e:
+        logging.error("Failed connection:"+ e.message)
+        print "Failed connection:", e.message
+    except ValueError as e:
+        logging.error("Failed processing:"+ e.message)
+        print "Failed connection:", e.message
+    finally:
+        #Processing complete
         uploader.xnatdisconnect()
-        logging.error("Failed to connect:", e)
+        logging.info("FINISHED")
+        print("FINISHED - see xnatupload.log for details")
 
