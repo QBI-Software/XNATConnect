@@ -170,6 +170,7 @@ class XnatConnector:
         proj_pi = self.get_projectPI(projectcode)
         ctr = 0
         default_scantype = 'MR Image Storage'
+        #load
         scanfiles = [f for f in listdir(scandir) if os.path.isdir(join(scandir, f))]
         if scanfiles:
             dirpath = os.path.dirname(scandir)
@@ -221,10 +222,10 @@ class XnatConnector:
                     # (scan_date, scan_time) = self.getSeriesDatestamp(scan_files[0])
                     scan_ctr += 1
                     scan = expt.scan(str(scan_id))
-                    # scan.insert() #Should detect type BUT IT DOESN'T
-                    if scan_type == 'MR Image Storage':
+                    # scan types in DICOMSOP.csv
+                    if scan_type == 'MR Image Storage' or '1.2.840.10008.5.1.4.1.1.4' in scan_type:
                         scan.create(scans='xnat:mrScanData')
-                    elif scan_type == 'Secondary Capture Image Storage':
+                    elif scan_type == 'Secondary Capture Image Storage' or '1.2.840.10008.5.1.4.1.1.7' in scan_type:
                         scan.create(scans='xnat:scScanData')
                     else:
                         modality = self.getModality(scan_files[0])
@@ -268,7 +269,7 @@ class XnatConnector:
         type = dirlabel
         dcm = dicom.read_file(dicomfile)
         if dcm:
-            type = dcm.SOPClassUID
+            type = dcm.SOPClassUID #see references at http://dicomlookup.com/dicom-sop.asp
 
         return type
 
