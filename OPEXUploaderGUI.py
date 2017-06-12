@@ -3,6 +3,7 @@ import logging
 import os
 import pyforms
 import subprocess
+from os.path import isdir, join
 from subprocess import check_output,STDOUT
 from   pyforms          import BaseWidget
 from   pyforms.Controls import ControlText, ControlDir, ControlCheckBox, ControlCombo
@@ -31,7 +32,7 @@ class OPEXUploaderGUI(BaseWidget):
         # Layout
         self._formset = ['_dataset',('_database','_project'),('_cbCreateSubject','_cbSkiprows'),'_inputdir','_status',('_submit','_cancel'),'']
         #Styling
-        self._status.__format__('background-color:white')
+        #self._status.__format__('background-color:white')
         # Define the button actions
         self._submit.value = self.__submitAction
         self._cancel.value = self.__cancelAction
@@ -61,8 +62,8 @@ class OPEXUploaderGUI(BaseWidget):
                     options.append('--skiprows')
         print options
         s =" "
-        cmd = "D:\\Programs\\Anaconda2\\python.exe D:\\lizcw\\Projects\\XNATConnect\\OPEXUploader.py "
-        cmd = cmd + s.join(options)
+        cwd = join(os.getcwd(), "OPEXUploader.py")
+        cmd = "D:\\Programs\\Anaconda2\\python.exe " + cwd + " " + s.join(options)
         print(cmd)
         msg=""
         try:
