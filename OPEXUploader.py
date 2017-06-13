@@ -12,6 +12,7 @@ from os.path import isdir, join
 from requests.exceptions import ConnectionError
 from qbixnat.CantabParser import CantabParser
 from qbixnat.AmunetParser import AmunetParser
+from qbixnat.AcerParser import AcerParser
 from qbixnat.XnatConnector import XnatConnector
 
 
@@ -121,6 +122,7 @@ if __name__ == "__main__":
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
+    parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--u', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
@@ -273,6 +275,53 @@ if __name__ == "__main__":
                         raise ValueError(e)
                 else:
                     raise IOError(msg)
+
+            ###ACE-R data
+            if (uploader.args.acer is not None and uploader.args.acer):
+                sheet = "1"
+                inputdir = uploader.args.acer
+                print("Input:", inputdir)
+                if access(inputdir, R_OK):
+                    seriespattern = '*.*'
+                    try:
+                        files = glob.glob(join(inputdir, seriespattern))
+                        print("Files:", len(files))
+                        project = uploader.xnat.get_project(projectcode)
+                        for f2 in files:
+                            print("Loading", f2)
+                            cantab = AcerParser(f2, sheet)
+                            cantab.sortSubjects()
+
+                            for sd in cantab.subjects:
+                                print('ID:', sd)
+                                s = project.subject(sd)
+                                if not s.exists():
+                                    if uploader.args.create is not None and uploader.args.create:
+                                        # create subject in database
+                                        skwargs = cantab.getSubjectData(sd)
+                                        s = uploader.xnat.createSubject(projectcode, sd, skwargs)
+                                        logging.info('Subject created: ' + sd)
+                                        print('Subject created: ' + sd)
+                                    else:
+                                        logging.warning('Subject does not exist - skipping:' + sd)
+                                        continue
+                                # Load data PER ROW
+                                for i, row in cantab.subjects[sd].iterrows():
+                                    cantabid = cantab.getSampleid(sd, row)
+                                    print(i, 'EXPT ID', cantabid)
+                                    row.replace(np.nan, '', inplace=True)
+                                    data = cantab.mapData(row, i)
+                                    xsd = cantab.getXsd()
+                                    msg = uploader.loadSampledata(s, xsd, "AC_" + cantabid, data)
+                                    logging.info(msg)
+                                    print(msg)
+
+                    except:
+                        e = sys.exc_info()[0]
+                        raise ValueError(e)
+                else:
+                    raise IOError(msg)
+
         else:
             raise ConnectionError("Connection failed - check config")
     except IOError as e:

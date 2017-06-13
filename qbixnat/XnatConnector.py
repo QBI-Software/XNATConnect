@@ -211,26 +211,23 @@ class XnatConnector:
 
                     scan_type = self.getScanType(default_scantype, scan_files[0])
                     scan_id = self.getSeriesNumber(subdr, scan_files[0])
-                    print('Scan ID:', scan_id, 'Scan type=',scan_type)
-
                     scan_pi = self.getPI(scan_files[0])
-                    if DEBUG or proj_pi in scan_pi or proj_pi in owners:
-                        logging.info("Owner verified:  scan=%s project=%s", scan_pi, proj_pi)
-                    else:
-                        logging.warning("Owner does not match - skipping upload: scan=%s project=", scan_pi, proj_pi)
-                        continue
+                    print('Scan ID:', scan_id, 'Scan type=', scan_type, 'Scan info=',scan_pi)
                     # (scan_date, scan_time) = self.getSeriesDatestamp(scan_files[0])
                     scan_ctr += 1
                     scan = expt.scan(str(scan_id))
-                    # scan types in DICOMSOP.csv
+                    # Refer to scan types in DICOMSOP.csv
                     if scan_type == 'MR Image Storage' or '1.2.840.10008.5.1.4.1.1.4' in scan_type:
                         scan.create(scans='xnat:mrScanData')
+                        logging.info("Scan created[%s]:  MR Image Storage [%s] - %s", scan_id, scan_type, scan_pi)
                     elif scan_type == 'Secondary Capture Image Storage' or '1.2.840.10008.5.1.4.1.1.7' in scan_type:
                         scan.create(scans='xnat:scScanData')
+                        logging.info("Scan created[%s]:  Secondary Capture Image Storage [%s] - %s", scan_id, scan_type, scan_pi)
                     else:
                         modality = self.getModality(scan_files[0])
                         if modality is not None and modality == 'MR':
                             scan.create(scans='xnat:otherDicomScanData')
+                            logging.info("Scan created[%s]:  Other DICOM [%s] - %s", scan_id, scan_type, scan_pi)
 
                     dicom_resource = scan.resource('DICOM')  # crucial for display DICOM headers
                     dicom_resource.put_dir(dcm_path, overwrite=True, extract=True)
