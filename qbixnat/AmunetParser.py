@@ -14,34 +14,20 @@ import argparse
 import glob
 import re
 import shutil
+import sys
 from datetime import datetime
 from os import listdir, R_OK, path, mkdir, access
 from os.path import isdir, join, basename, splitext
-
+from qbixnat.DataParser import DataParser
 
 import pandas
 
-class AmunetParser:
+class AmunetParser(DataParser):
 
-    def __init__(self, datafile, sheet=1):
-        self.datafile = datafile #full pathname to data file
-        if (len(datafile)> 0):
-            (bname, extn)= splitext(basename(datafile))
-        self.type = extn #extension - xlsx or csv
-        self.sheet = sheet
-        self.loadData()
+    def __init__(self, *args):
+        #super(AmunetParser, self).__init__(*args) - PYTHON V3
+        DataParser.__init__(self, *args)
 
-    def loadData(self):
-        if self.type =='.xlsx':
-            self.data = pandas.read_excel(self.datafile, self.sheet)
-        elif self.type == '.csv':
-            self.data = pandas.read_csv(self.datafile)
-        else:
-            self.data = None
-        if self.data is not None:
-            print('Data loaded')
-        else:
-            print('No data to load')
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -56,7 +42,7 @@ class AmunetParser:
     def getXsd(self):
         return 'opex:amunet'
 
-    def mapAEVdata(self, row):
+    def mapAEVdata(self, row,i):
         """
         Maps required fields from input rows
         :param row:
@@ -67,6 +53,8 @@ class AmunetParser:
         xsd = self.getXsd()
         data = {
             xsd + '/interval': str(interval),
+            xsd + '/sample_id': str(i),  # row number in this data file for reference
+            xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/AEVcomments': str(row['AEV_Lexical rating']),
             xsd + '/AEV': str(row['AEV_Average total error']),
             xsd + '/EV': str(row['EV_Average total error']),
@@ -76,7 +64,7 @@ class AmunetParser:
         }
         return data
 
-    def mapSCSdata(self,row):
+    def mapSCSdata(self,row,i):
         """
         Maps required fields from input row
         :param self:
@@ -88,6 +76,8 @@ class AmunetParser:
         xsd = self.getXsd()
         data = {
             xsd + '/interval': str(interval),
+            xsd + '/sample_id': str(i),  # row number in this data file for reference
+            xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/SCScomments': str(row['SCS_Lexical rating']),
             xsd + '/SCS': str(row['SCS_Average total error']),
             xsd + '/SCD': str(row['SCD_Average total error']),
@@ -143,12 +133,11 @@ if __name__ == "__main__":
             Reads files in a directory and extracts data ready to load to XNAT database
 
              ''')
-    parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\cantab")
+    parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\amunet")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="1")
     args = parser.parse_args()
 
     inputdir = args.filedir
-    outputfile = args.report
     sheet = args.sheet
     print("Input:", inputdir)
     if access(inputdir, R_OK):
@@ -164,16 +153,17 @@ if __name__ == "__main__":
                 print('Subject summary')
                 for sd in cantab.subjects:
                     print('ID:', sd)
-                    dob = cantab.subjects[sd]['S_Date of birth'][0]
+                    dob = cantab.subjects[sd]['S_Date of birth']
                     for i, row in cantab.subjects[sd].iterrows():
-                        print(i, 'Visit:', row['S_Visit'], 'AEV_Average total error', row['AEV_Average total error'] )
+                        print(i, 'Visit:', row['S_Visit'], 'AEV_Average total error', row['AEV_Average total error'], 'DOB', cantab.formatDobNumber(row['S_Date of birth']) )
 
 
         except ValueError as e:
             print("Sheet not found: ", e)
 
         except:
-            raise OSError
+            e = sys.exc_info()[0]
+            print(e)
 
     else:
         print("Cannot access directory: ", inputdir)

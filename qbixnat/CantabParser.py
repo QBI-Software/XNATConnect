@@ -17,31 +17,14 @@ import shutil
 from datetime import datetime
 from os import listdir, R_OK, path, mkdir, access
 from os.path import isdir, join, basename, splitext
-
+from qbixnat.DataParser import DataParser
 
 import pandas
 
-class CantabParser:
+class CantabParser(DataParser):
 
-    def __init__(self, datafile, sheet=1):
-        self.datafile = datafile #full pathname to data file
-        if (len(datafile)> 0):
-            (bname, extn)= splitext(basename(datafile))
-        self.type = extn #extension - xlsx or csv
-        self.sheet = sheet
-        self.loadData()
-
-    def loadData(self):
-        if self.type =='.xlsx':
-            self.data = pandas.read_excel(self.datafile, self.sheet)
-        elif self.type == '.csv':
-            self.data = pandas.read_csv(self.datafile)
-        else:
-            self.data = None
-        if self.data is not None:
-            print('Data loaded')
-        else:
-            print('No data to load')
+    def __init__(self, *args):
+        DataParser.__init__(self, *args)
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -106,9 +89,7 @@ class CantabParser:
         motdata = {
             motxsd + '/interval': str(interval),
             motxsd + '/date': row['Visit Start (Local)'],
-            motxsd + '/date_analysed': visit_date,
             motxsd + '/sample_id': str(i),  # row number in this data file for reference
-            motxsd + '/sample_num': '0',  # ie repeat runs - may need to fix later
             motxsd + '/sample_quality': 'Unknown',  # default - check later if an error
             motxsd + '/status': str(row['MOT Voice Status']),
             motxsd + '/comments': comments,
@@ -132,9 +113,7 @@ class CantabParser:
         motdata = {
             xsd + '/interval': str(interval),
             xsd + '/date': row['Visit Start (Local)'],  # PARSED in experiment load
-            xsd + '/date_analysed': visit_date,
             xsd + '/sample_id': str(i),  # row number in this data file for reference
-            xsd + '/sample_num': '0',  # ie repeat runs - may need to fix later
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/status': str(row['PAL Recommended Standard Status']),
             xsd + '/comments': comments,
@@ -164,9 +143,7 @@ class CantabParser:
         motdata = {
             xsd + '/interval': str(interval),
             xsd + '/date': row['Visit Start (Local)'],  # PARSED in experiment load
-            xsd + '/date_analysed': visit_date,
             xsd + '/sample_id': str(i),  # row number in this data file for reference
-            xsd + '/sample_num': '0',  # ie repeat runs - may need to fix later
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/status': str(row['DMS Recommended Standard Status']),
             xsd + '/comments': comments,
@@ -204,9 +181,7 @@ class CantabParser:
         motdata = {
             xsd + '/interval': str(interval),
             xsd + '/date': row['Visit Start (Local)'],  # PARSED in experiment load
-            xsd + '/date_analysed': visit_date,
             xsd + '/sample_id': str(i),  # row number in this data file for reference
-            xsd + '/sample_num': '0',  # ie repeat runs - may need to fix later
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/status': str(row['SWM Recommended standard Status']),
             xsd + '/comments': comments,
@@ -249,7 +224,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     inputdir = args.filedir
-    outputfile = args.output
     sheet = args.sheet
     print("Input:", inputdir)
     if access(inputdir, R_OK):
@@ -264,9 +238,9 @@ if __name__ == "__main__":
                 print('Subject summary')
                 for sd in cantab.subjects:
                     print('ID:', sd)
-                    dob = cantab.subjects[sd]['Date of Birth'][0]
                     for i, row in cantab.subjects[sd].iterrows():
-                        print(i, 'Visit:', row['Visit Identifier'], 'MOTML', row['MOTML'],'MOTSDL',row['MOTSDL'] )
+                        dob = cantab.formatDob(str(cantab.subjects[sd]['Date of Birth'][i]))
+                        print(i, 'Visit:', row['Visit Identifier'], 'DOB', dob,'MOTML', row['MOTML'],'MOTSDL',row['MOTSDL'] )
 
 
         except ValueError as e:

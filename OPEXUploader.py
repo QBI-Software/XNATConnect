@@ -48,10 +48,18 @@ class OPEXUploader():
     def xnatdisconnect(self):
         self.xnat.conn.disconnect()
 
+    def upload_Participants(self,projectcode, datafile):
+        """
+        Upload Participants from a file
+        :param projectcode: Project to load to
+        :param datafile:
+        :return:
+        """
+
     def loadSampledata(self,subject, samplexsd, sampleid, sampledata):
         """ Loads sample data from CANTAB data dump
         Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
-        :param cantabid: ID for this row of CANTAB data
+        :param sampleid: ID for this row of CANTAB data
         :param i: row number of dataset
         :param row: row as pandas series with data
         :param subject: subject to add experiment to
@@ -66,39 +74,37 @@ class OPEXUploader():
         return msg
 
 
-    def loadAMUNETdata(self,cantabid,row,subject, amparser):
+    def loadAMUNETdata(self,sampleid,i,row,subject, amparser):
         """ Loads AMUNET sample data from data dump
         Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
-        :param cantabid: ID for this row of data
+        :param sampleid: ID for this row of data
         :param i: row number of dataset
         :param row: row as pandas series with data
         :param subject: subject to add experiment to
         :return: msg for logging
         """
-        motid = cantabid
-        expt = subject.experiment(motid)
+        motid = sampleid
         motxsd = amparser.getXsd()
+        expt = subject.experiment(motid)
 
         if not expt.exists():
-
             #two files with different columns merged to one
             if 'AEV_Average total error' in row:
-                motdata = amparser.mapAEVdata(row)
+                motdata = amparser.mapAEVdata(row,i)
             else:
-                motdata = amparser.mapSCSdata(row)
+                motdata = amparser.mapSCSdata(row,i)
             self.xnat.createExperiment(subject, motxsd, motid, motdata)
             msg = 'Amunet experiment created:' + motid
 
         elif (len(expt.xpath('opex:AEV')) > 0 and len(expt.xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row):  # loaded AEV data but not SCS
-
             e1 = expt
-            motdata = amparser.mapSCSdata(row)
+            motdata = amparser.mapSCSdata(row,i)
             e1.attrs.mset(motdata)
             msg = 'Amunet experiment updated with SCS: '+ motid
 
         elif(len(expt.xpath('opex:SCS')) > 0 and len(expt.xpath('opex:AEV')) == 0 and 'AEV_Average total error' in row):  # loaded SCS data but not AEV
             e1 = expt
-            motdata = amparser.mapAEVdata(row)
+            motdata = amparser.mapAEVdata(row,i)
             e1.attrs.mset(motdata)
             msg = 'Amunet experiment updated with AEV: '+ motid
         else:
@@ -117,6 +123,7 @@ if __name__ == "__main__":
     parser.add_argument('projectcode', action='store', help='select project by code')
     parser.add_argument('--projects', action='store_true', help='list projects')
     parser.add_argument('--subjects', action='store_true', help='list subjects')
+    parser.add_argument('--su', action='store', help='Upload a list of participants')
     parser.add_argument('--g', action='store', help='get XNAT ID for subject ID')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
@@ -143,18 +150,22 @@ if __name__ == "__main__":
             if (not p.exists()):
                 msg = "This project [%s] does not exist in this database [%s]" % (projectcode, uploader.args.database)
                 raise ConnectionError(msg)
+            # List available subjects in project
             if (uploader.args.subjects is not None and uploader.args.subjects):
                 logging.info("Calling List Subjects")
                 uploader.xnat.list_subjects_all(projectcode)
+            # List available projects
             if (uploader.args.projects is not None and uploader.args.projects):
                 logging.info("Calling List Projects")
                 projlist = uploader.xnat.list_projects()
                 for p in projlist:
                     print("Project: ", p.id())
+            # Lookup XNAT ID for a participant ID
             if (uploader.args.g is not None and uploader.args.g):
                 subjectid = uploader.args.g
                 sid = uploader.xnat.get_subjectid_bylabel(projectcode, subjectid)
                 print("XNAT ID=%s for subject ID=%s" % (sid, subjectid))
+            # Upload MRI scans from directory
             if (uploader.args.u is not None and uploader.args.u):
                 uploaddir = uploader.args.u  # Top level DIR FOR SCANS
                 # Directory structure data/subject_label/scans/session_id/*.dcm
@@ -168,6 +179,20 @@ if __name__ == "__main__":
                 else:
                     msg = "Directory path cannot be found: %s" % uploaddir
                     raise IOError(msg)
+            # Upload Participants from single file
+            if (uploader.args.su is not None and uploader.args.su):
+                uploadfile = uploader.args.su  # file expected
+                if access(uploadfile, R_OK):
+                    fid = uploader.upload_Participants(projectcode, uploadfile)
+                    if fid == 0:
+                        msg = 'Upload not successful - 0 participants uploaded'
+                        raise ValueError(msg)
+                    else:
+                        logging.info("Participants uploaded: %d", fid)
+                else:
+                    msg = "Directory path cannot be found: %s" % uploadfile
+                    raise IOError(msg)
+            # Upload CANTAB data from directory
             if (uploader.args.cantab is not None and uploader.args.cantab):
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
@@ -180,16 +205,16 @@ if __name__ == "__main__":
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             print("Loading", f2)
-                            cantab = CantabParser(f2, sheet)
-                            cantab.sortSubjects()
+                            dp = CantabParser(f2, sheet)
+                            dp.sortSubjects()
 
-                            for sd in cantab.subjects:
+                            for sd in dp.subjects:
                                 print('ID:', sd)
                                 s = project.subject(sd)
                                 if not s.exists():
                                     if uploader.args.create is not None and uploader.args.create:
                                         #create subject in database
-                                        skwargs = cantab.getSubjectData(sd)
+                                        skwargs = dp.getSubjectData(sd)
                                         s = uploader.xnat.createSubject(projectcode,sd, skwargs)
                                         logging.info('Subject created: ' + sd)
                                         print('Subject created: ' + sd)
@@ -197,31 +222,31 @@ if __name__ == "__main__":
                                         logging.warning('Subject does not exist - skipping:' + sd)
                                         continue
                                 #Load data PER ROW
-                                for i, row in cantab.subjects[sd].iterrows():
+                                for i, row in dp.subjects[sd].iterrows():
                                     if uploader.args.skiprows is not None and uploader.args.skiprows and str(row['DMS Recommended Standard Status']) in ['NOT_RUN', 'ABORTED']:
                                         continue
                                     row.replace(np.nan, '', inplace=True)
-                                    cantabid = cantab.getSampleid(sd, row)
-                                    print(i, 'Visit:', row['Visit Identifier'], 'EXPT ID', cantabid)
+                                    sampleid = dp.getSampleid(sd, row)
+                                    print(i, 'Visit:', row['Visit Identifier'], 'EXPT ID', sampleid)
                                     #Sample
-                                    data = cantab.mapMOTdata(row, i)
-                                    xsd = cantab.getMOTxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "MOT_" + cantabid, data)
+                                    data = dp.mapMOTdata(row, i)
+                                    xsd = dp.getMOTxsd()
+                                    msg = uploader.loadSampledata(s, xsd, "MOT_" + sampleid, data)
                                     logging.info(msg)
                                     print(msg)
-                                    data = cantab.mapPALdata(row, i)
-                                    xsd = cantab.getPALxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "PAL_" + cantabid, data)
+                                    data = dp.mapPALdata(row, i)
+                                    xsd = dp.getPALxsd()
+                                    msg = uploader.loadSampledata(s, xsd, "PAL_" + sampleid, data)
                                     logging.info(msg)
                                     print(msg)
-                                    data = cantab.mapDMSdata(row, i)
-                                    xsd = cantab.getDMSxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "DMS_" + cantabid, data)
+                                    data = dp.mapDMSdata(row, i)
+                                    xsd = dp.getDMSxsd()
+                                    msg = uploader.loadSampledata(s, xsd, "DMS_" + sampleid, data)
                                     logging.info(msg)
                                     print(msg)
-                                    data = cantab.mapSWMdata(row, i)
-                                    xsd = cantab.getSWMxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "SWM_" + cantabid, data)
+                                    data = dp.mapSWMdata(row, i)
+                                    xsd = dp.getSWMxsd()
+                                    msg = uploader.loadSampledata(s, xsd, "SWM_" + sampleid, data)
                                     logging.info(msg)
                                     print(msg)
 
@@ -232,7 +257,7 @@ if __name__ == "__main__":
                 else:
                     msg = "Access to data directory is denied: %s" % inputdir
                     raise ConnectionError(msg)
-            ###Amunet data
+            ### Upload Amunet data from directory
             if (uploader.args.amunet is not None and uploader.args.amunet):
                 sheet = "1"
                 inputdir = uploader.args.amunet
@@ -245,16 +270,16 @@ if __name__ == "__main__":
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             print("Loading", f2)
-                            cantab = AmunetParser(f2, sheet)
-                            cantab.sortSubjects()
+                            dp = AmunetParser(f2, sheet)
+                            dp.sortSubjects()
 
-                            for sd in cantab.subjects:
+                            for sd in dp.subjects:
                                 print('ID:', sd)
                                 s = project.subject(sd)
                                 if not s.exists():
                                     if uploader.args.create is not None and uploader.args.create:
                                         #create subject in database
-                                        skwargs = cantab.getSubjectData(sd)
+                                        skwargs = dp.getSubjectData(sd)
                                         s = uploader.xnat.createSubject(projectcode,sd, skwargs)
                                         logging.info('Subject created: ' + sd)
                                         print('Subject created: ' + sd)
@@ -262,11 +287,11 @@ if __name__ == "__main__":
                                         logging.warning('Subject does not exist - skipping:' + sd)
                                         continue
                                 #Load data PER ROW
-                                for i, row in cantab.subjects[sd].iterrows():
-                                    cantabid = cantab.getSampleid(sd,row)
-                                    print(i, 'Visit:', row['S_Visit'], 'EXPT ID', cantabid)
+                                for i, row in dp.subjects[sd].iterrows():
+                                    sampleid = dp.getSampleid(sd,row)
+                                    print(i, 'Visit:', row['S_Visit'], 'EXPT ID', sampleid)
                                     row.replace(np.nan,'', inplace=True)
-                                    msg = uploader.loadAMUNETdata(cantabid,row,s,cantab)
+                                    msg = uploader.loadAMUNETdata(sampleid,i,row,s,dp)
                                     logging.info(msg)
                                     print(msg)
 
@@ -276,7 +301,7 @@ if __name__ == "__main__":
                 else:
                     raise IOError(msg)
 
-            ###ACE-R data
+            ### Upload ACE-R data from directory
             if (uploader.args.acer is not None and uploader.args.acer):
                 sheet = "1"
                 inputdir = uploader.args.acer
@@ -289,16 +314,16 @@ if __name__ == "__main__":
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             print("Loading", f2)
-                            cantab = AcerParser(f2, sheet)
-                            cantab.sortSubjects()
+                            dp = AcerParser(f2, sheet)
+                            dp.sortSubjects()
 
-                            for sd in cantab.subjects:
+                            for sd in dp.subjects:
                                 print('ID:', sd)
                                 s = project.subject(sd)
                                 if not s.exists():
                                     if uploader.args.create is not None and uploader.args.create:
                                         # create subject in database
-                                        skwargs = cantab.getSubjectData(sd)
+                                        skwargs = dp.getSubjectData(sd)
                                         s = uploader.xnat.createSubject(projectcode, sd, skwargs)
                                         logging.info('Subject created: ' + sd)
                                         print('Subject created: ' + sd)
@@ -306,13 +331,13 @@ if __name__ == "__main__":
                                         logging.warning('Subject does not exist - skipping:' + sd)
                                         continue
                                 # Load data PER ROW
-                                for i, row in cantab.subjects[sd].iterrows():
-                                    cantabid = cantab.getSampleid(sd, row)
-                                    print(i, 'EXPT ID', cantabid)
+                                for i, row in dp.subjects[sd].iterrows():
+                                    sampleid = dp.getSampleid(sd, row)
+                                    print(i, 'EXPT ID', sampleid)
                                     row.replace(np.nan, '', inplace=True)
-                                    data = cantab.mapData(row, i)
-                                    xsd = cantab.getXsd()
-                                    msg = uploader.loadSampledata(s, xsd, "AC_" + cantabid, data)
+                                    data = dp.mapData(row, i)
+                                    xsd = dp.getXsd()
+                                    msg = uploader.loadSampledata(s, xsd, sampleid, data)
                                     logging.info(msg)
                                     print(msg)
 

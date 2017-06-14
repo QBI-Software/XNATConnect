@@ -12,36 +12,16 @@ Created on Thu Mar 2 2017
 
 import argparse
 import glob
-import re
-import shutil
-from datetime import datetime
-from os import listdir, R_OK, path, mkdir, access
-from os.path import isdir, join, basename, splitext
+from os import R_OK, access
+from os.path import join
+
+from qbixnat.DataParser import DataParser
 
 
-import pandas
+class AcerParser(DataParser):
 
-class AcerParser:
-
-    def __init__(self, datafile, sheet=1):
-        self.datafile = datafile #full pathname to data file
-        if (len(datafile)> 0):
-            (bname, extn)= splitext(basename(datafile))
-        self.type = extn #extension - xlsx or csv
-        self.sheet = sheet
-        self.loadData()
-
-    def loadData(self):
-        if self.type =='.xlsx':
-            self.data = pandas.read_excel(self.datafile, self.sheet)
-        elif self.type == '.csv':
-            self.data = pandas.read_csv(self.datafile)
-        else:
-            self.data = None
-        if self.data is not None:
-            print('Data loaded')
-        else:
-            print('No data to load')
+    def __init__(self, *args):
+        DataParser.__init__(self, *args)
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -62,10 +42,12 @@ class AcerParser:
         :param row:
         :return:
         """
-        interval = 0 #NB There is no visit identifier
+        interval = str(row['Visit']) #NB There is no visit identifier
         xsd = self.getXsd()
         data = {
             xsd + '/interval': str(interval),
+            xsd + '/sample_id': str(i),  # row number in this data file for reference
+            xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/attention': str(row['Attention and Orientation']),
             xsd + '/memory': str(row['Memory']),
             xsd + '/fluency': str(row['Fluency']),
@@ -96,21 +78,16 @@ class AcerParser:
 
     def getSampleid(self,sd, row):
         """
-        Generate a unique id for Amunet sample
+        Generate a unique id for data sample
         :param row:
         :return:
         """
-
-        id = "AC_" + sd + "_1"
+        if 'Visit' in row:
+            id = "AC_" + sd + "_" + str(row['Visit'])
+        else:
+            id = "AC_" + sd
         return id
 
-    def formatDobNumber(self,orig):
-        """
-        Reformats DOB string from Amunet data float to yyyy-mm-dd
-        """
-        dateoffset = 693594
-        dt = datetime.fromordinal(dateoffset + int(orig))
-        return dt.strftime("%Y-%m-%d")
 
 ########################################################################
 
@@ -120,12 +97,12 @@ if __name__ == "__main__":
             Reads files in a directory and extracts data ready to load to XNAT database
 
              ''')
+
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\acer")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="1")
     args = parser.parse_args()
 
     inputdir = args.filedir
-
     sheet = args.sheet
     print("Input:", inputdir)
     if access(inputdir, R_OK):
@@ -141,9 +118,9 @@ if __name__ == "__main__":
                 print('Subject summary')
                 for sd in cantab.subjects:
                     print('ID:', sd)
-                    dob = cantab.subjects[sd]['DOB'][0]
+                    dob = cantab.subjects[sd]['DOB']
                     for i, row in cantab.subjects[sd].iterrows():
-                        print(i, 'ACE-R Total', row['ACE-R Total'] )
+                        print(i, 'ACE-R Total', row['ACE-R Total'], 'DOB', cantab.formatDobNumber(row['DOB']) )
 
 
         except ValueError as e:
