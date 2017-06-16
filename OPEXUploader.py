@@ -133,6 +133,7 @@ if __name__ == "__main__":
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--u', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
+    parser.add_argument('--r', action='store', help='Report')
     args = parser.parse_args()
     uploader = OPEXUploader(args)
     uploader.config()
