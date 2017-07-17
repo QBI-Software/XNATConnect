@@ -15,7 +15,7 @@ import glob
 import re
 import shutil
 from datetime import datetime
-from os import listdir, R_OK, path, mkdir, access
+from os import listdir, R_OK, path, mkdir, access,error
 from os.path import isdir, join, basename, splitext
 from qbixnat.DataParser import DataParser
 
@@ -23,8 +23,15 @@ import pandas
 
 class CantabParser(DataParser):
 
-    def __init__(self, *args):
+    def __init__(self, fields,*args):
         DataParser.__init__(self, *args)
+
+        try:
+            access(fields, R_OK)
+            self.cantabfields = pandas.read_csv(fields, header=0)
+        except:
+            raise error
+
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -73,128 +80,63 @@ class CantabParser(DataParser):
         cantabid = sd + '_' + self.getStringDateUTC(row['Visit Start (GMT)'])
         return cantabid
 
-    def getMOTxsd(self):
-        return 'opex:cantabMOT'
 
-    def mapMOTdata(self,row,i):
+    def getxsd(self):
+        xsd ={'MOT':'opex:cantabMOT',
+            'PAL':'opex:cantabPAL',
+            'SWM':'opex:cantabSWM',
+            'ERT':'opex:cantabERT',
+            'DMS':'opex:cantabDMS'
+              }
+        return xsd
+
+    def getCommentstring(self):
         """
-        Map MOT data to row input data
-        :param row: pandas series row data
-        :return: data kwargs structure to load to xnat expt
+        Ensure comment string is exactly as appears in spreadsheet
+        :return:
         """
-        motxsd = self.getMOTxsd()
-        visit_date = self.formatDateString(row['Visit Start (Local)'])
-        interval = self.getInterval(row['Visit Identifier'])
-        comments = str(row['MOT Voice Comment'])
-        motdata = {
-            motxsd + '/interval': str(interval),
-            motxsd + '/date': row['Visit Start (Local)'],
-            motxsd + '/sample_id': str(i),  # row number in this data file for reference
-            motxsd + '/sample_quality': 'Unknown',  # default - check later if an error
-            motxsd + '/status': str(row['MOT Voice Status']),
-            motxsd + '/comments': comments,
-            motxsd + '/MOTML': str(row['MOTML']),
-            motxsd + '/MOTSDL': str(row['MOTSDL'])}
-        return motdata
+        xsd = {'MOT': 'MOT Voice Comment',
+               'PAL': 'PAL Recommended Standard Comment',
+               'SWM': 'SWM Recommended standard Comment',
+               'ERT': 'ERT Short Comment',
+               'DMS': 'DMS Recommended Standard Comment'
+               }
+        return xsd
 
-    def getPALxsd(self):
-        return 'opex:cantabPAL'
-
-    def mapPALdata(self, row, i):
+    def getStatusstring(self):
         """
-        Map PAL data to row input data
-        :param row: pandas series row data
-        :return: data kwargs structure to load to xnat expt
-        """
-        xsd = self.getPALxsd()
-        visit_date = self.formatDateString(row['Visit Start (Local)'])
-        interval = self.getInterval(row['Visit Identifier'])
-        comments = str(row['PAL Recommended Standard Comment'])
-        motdata = {
-            xsd + '/interval': str(interval),
-            xsd + '/date': row['Visit Start (Local)'],  # PARSED in experiment load
-            xsd + '/sample_id': str(i),  # row number in this data file for reference
-            xsd + '/sample_quality': 'Unknown',  # default - check later if an error
-            xsd + '/status': str(row['PAL Recommended Standard Status']),
-            xsd + '/comments': comments,
-            xsd + '/PALFAMS': str(row['PALFAMS']),
-            xsd + '/PALMETS': str(row['PALMETS']),
-            xsd + '/PALTA': str(row['PALTA']),
-            xsd + '/PALTE': str(row['PALTE']),
-            xsd + '/PALTEA': str(row['PALTEA']),
-            xsd + '/PALTEA6': str(row['PALTEA6']),
-            xsd + '/PALTEA8': str(row['PALTEA8'])
-        }
-        return motdata
+                Ensure comment string is exactly as appears in spreadsheet
+                :return:
+                """
+        xsd = {'MOT': 'MOT Voice Status',
+               'PAL': 'PAL Recommended Standard Status',
+               'SWM': 'SWM Recommended standard Status',
+               'ERT': 'ERT Short Status',
+               'DMS': 'DMS Recommended Standard Status'
+               }
+        return xsd
 
-    def getDMSxsd(self):
-        return 'opex:cantabDMS'
-
-    def mapDMSdata(self, row,i):
-        """
-        Map DMS data to row input data
-        :param row: pandas series row data
-        :return: data kwargs structure to load to xnat expt
-        """
-        xsd = self.getDMSxsd()
-        visit_date = self.formatDateString(row['Visit Start (Local)'])
-        interval = self.getInterval(row['Visit Identifier'])
-        comments = str(row['DMS Recommended Standard Comment'])
-        motdata = {
-            xsd + '/interval': str(interval),
-            xsd + '/date': row['Visit Start (Local)'],  # PARSED in experiment load
-            xsd + '/sample_id': str(i),  # row number in this data file for reference
-            xsd + '/sample_quality': 'Unknown',  # default - check later if an error
-            xsd + '/status': str(row['DMS Recommended Standard Status']),
-            xsd + '/comments': comments,
-            xsd + '/DMSCC': str(row['DMSCC']),
-            xsd + '/DMSML': str(row['DMSML']),
-            xsd + '/DMSML0': str(row['DMSML0']),
-            xsd + '/DMSML12': str(row['DMSML12']),
-            xsd + '/DMSMLAD': str(row['DMSMLAD']),
-            xsd + '/DMSPC': str(row['DMSPC']),
-            xsd + '/DMSPC0': str(row['DMSPC0']),
-            xsd + '/DMSPC12': str(row['DMSPC12']),
-            xsd + '/DMSPCAD': str(row['DMSPCAD']),
-            xsd + '/DMSTC0': str(row['DMSTC0']),
-            xsd + '/DMSTC12': str(row['DMSTC12']),
-            xsd + '/DMSTCAD': str(row['DMSTCAD']),
-            xsd + '/DMSTCS': str(row['DMSTCS']),
-            xsd + '/DMSTE': str(row['DMSTE']),
-            xsd + '/DMSTEAD': str(row['DMSTEAD'])
-        }
-        return motdata
-
-    def getSWMxsd(self):
-        return 'opex:cantabSWM'
-
-    def mapSWMdata(self, row,i):
+    def mapData(self, row,i, type):
         """
         Map SWM data to row input data
         :param row: pandas series row data
         :return: data kwargs structure to load to xnat expt
         """
-        xsd = self.getSWMxsd()
-        visit_date = self.formatDateString(row['Visit Start (Local)'])
-        interval = self.getInterval(row['Visit Identifier'])
-        comments = str(row['SWM Recommended standard Comment'])
-        motdata = {
-            xsd + '/interval': str(interval),
+        xsd = self.getxsd()[type]
+
+        mandata = {
+            xsd + '/interval': self.getInterval(row['Visit Identifier']),
             xsd + '/date': row['Visit Start (Local)'],  # PARSED in experiment load
             xsd + '/sample_id': str(i),  # row number in this data file for reference
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
-            xsd + '/status': str(row['SWM Recommended standard Status']),
-            xsd + '/comments': comments,
-            xsd + '/SWMBE': str(row['SWMBE']),
-            xsd + '/SWMBE6': str(row['SWMBE6']),
-            xsd + '/SWMBE8': str(row['SWMBE8']),
-            xsd + '/SWMDE8': str(row['SWMDE8']),
-            xsd + '/SWMTE': str(row['SWMTE']),
-            xsd + '/SWMTE6': str(row['SWMTE6']),
-            xsd + '/SWMTE8': str(row['SWMTE8']),
-            xsd + '/SWMWE': str(row['SWMWE'])
+            xsd + '/data_valid': 'Initial',
+            xsd + '/status': str(row[self.getStatusstring()[type]]),
+            xsd + '/comments': str(row[self.getCommentstring()[type]])
         }
-        return motdata
+        motdata={}
+        for ctab in self.cantabfields[type].dropna():
+            motdata[xsd + '/' + ctab] = str(row[ctab])
+        return (mandata, motdata)
 
     def getSubjectData(self,sd):
         """
@@ -221,10 +163,13 @@ if __name__ == "__main__":
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\cantab")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract',
                         default="RowBySession_HealthyBrains")
+    parser.add_argument('--fields', action='store', help='CANTAB fields to extract',
+                        default="resources\\cantab_fields.csv")
     args = parser.parse_args()
 
     inputdir = args.filedir
     sheet = args.sheet
+    fields = args.fields
     print("Input:", inputdir)
     if access(inputdir, R_OK):
         seriespattern = '*.*'
@@ -233,21 +178,23 @@ if __name__ == "__main__":
             print("Files:", len(files))
             for f2 in files:
                 print("Loading",f2)
-                cantab = CantabParser(f2,sheet)
+                cantab = CantabParser(fields,f2,sheet)
                 cantab.sortSubjects()
                 print('Subject summary')
                 for sd in cantab.subjects:
                     print('ID:', sd)
                     for i, row in cantab.subjects[sd].iterrows():
                         dob = cantab.formatDob(str(cantab.subjects[sd]['Date of Birth'][i]))
-                        print(i, 'Visit:', row['Visit Identifier'], 'DOB', dob,'MOTML', row['MOTML'],'MOTSDL',row['MOTSDL'] )
+                        print(i, 'Visit:', row['Visit Identifier'], 'DOB', dob)
+                        for ctab in cantab.cantabfields['MOT']:
+                            print(ctab, row[ctab]) #'MOTML', row['MOTML'],'MOTSDL',row['MOTSDL'] )
 
 
         except ValueError as e:
             print("Sheet not found: ", e)
 
-        except:
-            raise OSError
+        except OSError as e:
+            print("OS error:", e)
 
     else:
         print("Cannot access directory: ", inputdir)

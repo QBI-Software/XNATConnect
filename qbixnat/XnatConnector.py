@@ -118,7 +118,7 @@ class XnatConnector:
             logging.warning("Subject not created: %s", label)
             return None
 
-    def createExperiment(self,subject,xsdtype,exptid,exptdata):
+    def createExperiment(self,subject,xsdtype,exptid,mandata,exptdata):
         """
         Creates an experiment of type xsdtype for subject with exptid and exptdata as dict
         No checks made for correct data fields - must represent the XSD as set in the database
@@ -130,7 +130,10 @@ class XnatConnector:
         """
         expt = None
         if subject is not None:
-            expt = subject.experiment(exptid).create(experiments=xsdtype)
+            #expt = subject.experiment(exptid).create(experiments=xsdtype) #doesn't work if have 'required' fields
+            mandata['experiments'] = xsdtype
+            mandata['ID']= exptid
+
             if xsdtype + '/date' in exptdata:
                 expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'],"%Y.%m.%d %H:%M:%S")
                 del exptdata[xsdtype + '/date']
@@ -138,10 +141,13 @@ class XnatConnector:
                 expt_creation = datetime.datetime.now()
             expt_creation_date = expt_creation.strftime("%Y%m%d")
             expt_creation_time = expt_creation.strftime("%H:%M:%S")
+            #create with mandatory data
+            expt = subject.experiment(exptid).create(**mandata)
+            # Add attributes as other fields
             expt.attrs.set('xnat:experimentData/date', expt_creation_date)
             expt.attrs.set('xnat:experimentData/time', expt_creation_time)
-            #Add attributes
             expt.attrs.mset(exptdata)
+
         return expt
 
     def checkUniqueLabel(self, subject, label):

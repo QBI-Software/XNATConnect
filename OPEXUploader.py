@@ -56,7 +56,7 @@ class OPEXUploader():
         :return:
         """
 
-    def loadSampledata(self,subject, samplexsd, sampleid, sampledata):
+    def loadSampledata(self,subject, samplexsd, sampleid, mandata,sampledata):
         """ Loads sample data from CANTAB data dump
         Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
         :param sampleid: ID for this row of CANTAB data
@@ -67,7 +67,7 @@ class OPEXUploader():
         """
         expt = subject.experiment(sampleid)
         if not expt.exists():
-            self.xnat.createExperiment(subject, samplexsd, sampleid, sampledata)
+            self.xnat.createExperiment(subject, samplexsd, sampleid, mandata,sampledata)
             msg = 'Experiment created:' + sampleid
         else:
             msg = 'Experiment already exists: ' + sampleid
@@ -111,6 +111,31 @@ class OPEXUploader():
             msg = 'Amunet experiment already exists: ' + motid
         return msg
 
+    def outputChecks(self,matches, missing, inputdir,filename):
+        import csv
+        match_filename = join(inputdir,"matched_" + filename)
+        missing_filename= join(inputdir,"missing_" + filename)
+        with open(match_filename, 'wb') as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter=',')
+            spamwriter.writerow(['Matched ID'])
+            for m in sorted(matches):
+                spamwriter.writerow([m])
+        #spamwriter.close()
+        #Missing subjects
+        with open(missing_filename, 'wb') as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter=',')
+            spamwriter.writerow(['Missing ID', 'DOB','Gender','Possible ID'])
+            for m in missing:
+                rootid = m['ID'][0:4]
+                guess = [s for s in matches if rootid in s]
+                if len(guess) <= 0:
+                    guess=""
+                spamwriter.writerow([m['ID'],
+                                     m['info']['dob'],
+                                     m['info']['gender'],
+                                     guess])
+        #spamwriter.close()
+        return (match_filename,missing_filename)
 
 ########################################################################
 if __name__ == "__main__":
@@ -127,6 +152,10 @@ if __name__ == "__main__":
     parser.add_argument('--g', action='store', help='get XNAT ID for subject ID')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
+    parser.add_argument('--fields', action='store', help='CANTAB fields to extract',
+                        default="resources\\cantab_fields.csv")
+    parser.add_argument('--checks', action='store', help='CANTAB test run with output to files',
+                        default="cantab_checks.csv")
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
@@ -197,6 +226,9 @@ if __name__ == "__main__":
             if (uploader.args.cantab is not None and uploader.args.cantab):
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
+                cantabfields = uploader.args.fields
+                missing =[]
+                matches =[]
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
                     seriespattern = '*.*'
@@ -206,7 +238,7 @@ if __name__ == "__main__":
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             print("Loading", f2)
-                            dp = CantabParser(f2, sheet)
+                            dp = CantabParser(cantabfields,f2, sheet)
                             dp.sortSubjects()
 
                             for sd in dp.subjects:
@@ -220,36 +252,35 @@ if __name__ == "__main__":
                                         logging.info('Subject created: ' + sd)
                                         print('Subject created: ' + sd)
                                     else:
+                                        missing.append({"ID":sd,"info":dp.getSubjectData(sd)})
                                         logging.warning('Subject does not exist - skipping:' + sd)
                                         continue
                                 #Load data PER ROW
-                                for i, row in dp.subjects[sd].iterrows():
-                                    if uploader.args.skiprows is not None and uploader.args.skiprows and str(row['DMS Recommended Standard Status']) in ['NOT_RUN', 'ABORTED']:
-                                        continue
-                                    row.replace(np.nan, '', inplace=True)
-                                    sampleid = dp.getSampleid(sd, row)
-                                    print(i, 'Visit:', row['Visit Identifier'], 'EXPT ID', sampleid)
-                                    #Sample
-                                    data = dp.mapMOTdata(row, i)
-                                    xsd = dp.getMOTxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "MOT_" + sampleid, data)
-                                    logging.info(msg)
-                                    print(msg)
-                                    data = dp.mapPALdata(row, i)
-                                    xsd = dp.getPALxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "PAL_" + sampleid, data)
-                                    logging.info(msg)
-                                    print(msg)
-                                    data = dp.mapDMSdata(row, i)
-                                    xsd = dp.getDMSxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "DMS_" + sampleid, data)
-                                    logging.info(msg)
-                                    print(msg)
-                                    data = dp.mapSWMdata(row, i)
-                                    xsd = dp.getSWMxsd()
-                                    msg = uploader.loadSampledata(s, xsd, "SWM_" + sampleid, data)
-                                    logging.info(msg)
-                                    print(msg)
+                                matches.append(sd)
+                                if uploader.args.checks is None:
+                                    for i, row in dp.subjects[sd].iterrows():
+                                        if uploader.args.skiprows is not None and \
+                                                uploader.args.skiprows and \
+                                                str(row['DMS Recommended Standard Status']) in ['NOT_RUN', 'ABORTED']:
+                                            continue
+                                        row.replace(np.nan, '', inplace=True)
+                                        sampleid = dp.getSampleid(sd, row)
+                                        print(i, 'Visit:', row['Visit Identifier'], 'EXPT ID', sampleid)
+                                        #Sample
+                                        xsdtypes = dp.getxsd()
+                                        for type in xsdtypes.keys():
+                                            (mandata,data) = dp.mapData(row, i, type)
+                                            xsd = xsdtypes[type]
+                                            msg = uploader.loadSampledata(s, xsd, type+ "_" + sampleid, mandata,data)
+                                            logging.info(msg)
+                                            print(msg)
+                        #Output matches and missing
+                        if uploader.args.checks is not None:
+                            reportdir = join(inputdir,"report")
+                            (out1,out2)=uploader.outputChecks(matches, missing, reportdir, args.checks)
+                            print("Outputfiles:", out1, " ", out2)
+
+
 
                     except:
                         e = sys.exc_info()[0]
@@ -351,14 +382,14 @@ if __name__ == "__main__":
         else:
             raise ConnectionError("Connection failed - check config")
     except IOError as e:
-        logging.error("Failed IO:"+ e.message)
-        print "Failed IO:", e.message
+        logging.error(e)
+        print "Failed IO:", e
     except ConnectionError as e:
-        logging.error("Failed connection:"+ e.message)
-        print "Failed connection:", e.message
+        logging.error(e)
+        print "Failed connection:", e
     except ValueError as e:
-        logging.error("Failed processing:"+ e.message)
-        print "Failed connection:", e.message
+        logging.error(e)
+        print "ERROR:", e
     finally:
         #Processing complete
         uploader.xnatdisconnect()
