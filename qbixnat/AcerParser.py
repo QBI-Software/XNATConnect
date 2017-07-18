@@ -33,21 +33,22 @@ class AcerParser(DataParser):
                 print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
-    def getXsd(self):
-        return 'opex:acer'
+    def getxsd(self):
+        return {"ACER":'opex:acer'}
 
-    def mapData(self, row, i):
+    def mapData(self, row, i, type=None):
         """
         Maps required fields from input rows
         :param row:
         :return:
         """
         interval = str(row['Visit']) #NB There is no visit identifier
-        xsd = self.getXsd()
-        data = {
+        xsd = self.getxsd()["ACER"]
+        mandata = {
             xsd + '/interval': str(interval),
             xsd + '/sample_id': str(i),  # row number in this data file for reference
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
+            xsd + '/data_valid': 'Initial',
             xsd + '/attention': str(row['Attention and Orientation']),
             xsd + '/memory': str(row['Memory']),
             xsd + '/fluency': str(row['Fluency']),
@@ -55,9 +56,10 @@ class AcerParser(DataParser):
             xsd + '/visuospatial': str(row['Visuospatial']),
             xsd + '/MMSE': str(row['MMSE Total']),
             xsd + '/total': str(row['ACE-R Total'])
-
         }
-        return data
+
+        data = {}
+        return (mandata,data)
 
 
     def getSubjectData(self,sd):
@@ -83,9 +85,9 @@ class AcerParser(DataParser):
         :return:
         """
         if 'Visit' in row:
-            id = "AC_" + sd + "_" + str(row['Visit'])
+            id = sd + "_" + str(row['Visit'])
         else:
-            id = "AC_" + sd
+            id = sd
         return id
 
 

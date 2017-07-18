@@ -19,22 +19,22 @@ class OPEXUploaderGUI(BaseWidget):
         self._dataset = ControlCombo('Select dataset')
         self._dataset.add_item('Help', '--help')
         self._dataset.add_item('Test Connection', '--projects')
-        self._dataset.add_item('Participants', '--su')
         self._dataset.add_item('CANTAB', '--cantab')
         self._dataset.add_item('AMUNET', '--amunet')
         self._dataset.add_item('ACE-R', '--acer')
         self._dataset.add_item('MRIscans', '--u')
         self._cbCreateSubject = ControlCheckBox('Create Subjects from data')
         self._cbSkiprows = ControlCheckBox('Skip rows with ABORTED or NOT_RUN')
+        self._cbChecks = ControlCheckBox('Test run with validation checks')
         self._database = ControlText('Database config')
         self._project = ControlText('Project code')
         self._status = ControlLabel('Status')
         self._submit = ControlButton('Run')
         self._cancel = ControlButton('Cancel')
         # Layout
-        self._formset = ['_dataset',('_database','_project'),('_cbCreateSubject','_cbSkiprows'),'_inputdir','_status',('_submit','_cancel'),'']
+        self._formset = ['_dataset',('_database','_project'),('_cbChecks'),('_cbCreateSubject','_cbSkiprows'),'_inputdir','_status',('_submit','_cancel'),'']
         #Styling
-        #self._status.__format__('background-color:white')
+        self._status.__setattr__('color','white')
         # Define the button actions
         self._submit.value = self.__submitAction
         self._cancel.value = self.__cancelAction
@@ -45,7 +45,7 @@ class OPEXUploaderGUI(BaseWidget):
         :return: return code shown in status
         """
         options = [self._dataset.value, self._database.value, self._project.value]
-
+        self._status.value ="Running..."
         if self._dataset.value != "--help":
             if (len(self._database.value)<=0 and len(self._project.value) <=0):
                 self._status.value ="Program requires database and project values to proceed"
@@ -62,6 +62,8 @@ class OPEXUploaderGUI(BaseWidget):
                     options.append('--create')
                 if (self._cbSkiprows.value):
                     options.append('--skiprows')
+                if (self._cbChecks.value):
+                    options.append('--checks')
         print options
         s =" "
         cwd = join(os.getcwd(), "OPEXUploader.py")

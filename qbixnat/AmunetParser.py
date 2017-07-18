@@ -39,7 +39,7 @@ class AmunetParser(DataParser):
                 print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
-    def getXsd(self):
+    def getxsd(self):
         return 'opex:amunet'
 
     def mapAEVdata(self, row,i):
@@ -50,11 +50,14 @@ class AmunetParser(DataParser):
         """
         visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
         interval = int(visit.group(1)) - 1
-        xsd = self.getXsd()
-        data = {
+        xsd = self.getxsd()
+        mandata = {
             xsd + '/interval': str(interval),
             xsd + '/sample_id': str(i),  # row number in this data file for reference
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
+            xsd + '/data_valid': 'Initial'
+        }
+        data = {
             xsd + '/AEVcomments': str(row['AEV_Lexical rating']),
             xsd + '/AEV': str(row['AEV_Average total error']),
             xsd + '/EV': str(row['EV_Average total error']),
@@ -62,7 +65,7 @@ class AmunetParser(DataParser):
             xsd + '/DV': str(row['DV_Average total error'])
 
         }
-        return data
+        return (mandata,data)
 
     def mapSCSdata(self,row,i):
         """
@@ -73,11 +76,14 @@ class AmunetParser(DataParser):
         """
         visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
         interval = int(visit.group(1)) - 1
-        xsd = self.getXsd()
-        data = {
+        xsd = self.getxsd()
+        mandata = {
             xsd + '/interval': str(interval),
             xsd + '/sample_id': str(i),  # row number in this data file for reference
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
+            xsd + '/data_valid': 'Initial'
+        }
+        data = {
             xsd + '/SCScomments': str(row['SCS_Lexical rating']),
             xsd + '/SCS': str(row['SCS_Average total error']),
             xsd + '/SCD': str(row['SCD_Average total error']),
@@ -86,7 +92,7 @@ class AmunetParser(DataParser):
             xsd + '/SES': str(row['SES_Average total error']),
             xsd + '/SED': str(row['SED_Average total error'])
         }
-        return data
+        return (mandata, data)
 
     def getSubjectData(self,sd):
         """

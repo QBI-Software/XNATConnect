@@ -3,6 +3,7 @@ import glob
 import logging
 import os
 import sys
+import csv
 import re
 import numpy as np
 from datetime import datetime
@@ -48,13 +49,7 @@ class OPEXUploader():
     def xnatdisconnect(self):
         self.xnat.conn.disconnect()
 
-    def upload_Participants(self,projectcode, datafile):
-        """
-        Upload Participants from a file
-        :param projectcode: Project to load to
-        :param datafile:
-        :return:
-        """
+
 
     def loadSampledata(self,subject, samplexsd, sampleid, mandata,sampledata):
         """ Loads sample data from CANTAB data dump
@@ -76,7 +71,8 @@ class OPEXUploader():
 
     def loadAMUNETdata(self,sampleid,i,row,subject, amparser):
         """ Loads AMUNET sample data from data dump
-        Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
+        Data is combined from two source files
+        Check if expt already exists - don't overwrite (allows for cumulative data files to be uploaded)
         :param sampleid: ID for this row of data
         :param i: row number of dataset
         :param row: row as pandas series with data
@@ -84,57 +80,131 @@ class OPEXUploader():
         :return: msg for logging
         """
         motid = sampleid
-        motxsd = amparser.getXsd()
+        motxsd = amparser.getxsd()
         expt = subject.experiment(motid)
 
         if not expt.exists():
             #two files with different columns merged to one
             if 'AEV_Average total error' in row:
-                motdata = amparser.mapAEVdata(row,i)
+                (mandata,motdata) = amparser.mapAEVdata(row,i)
             else:
-                motdata = amparser.mapSCSdata(row,i)
-            self.xnat.createExperiment(subject, motxsd, motid, motdata)
+                (mandata, motdata) = amparser.mapSCSdata(row,i)
+            self.xnat.createExperiment(subject, motxsd, motid, mandata,motdata)
             msg = 'Amunet experiment created:' + motid
 
         elif (len(expt.xpath('opex:AEV')) > 0 and len(expt.xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row):  # loaded AEV data but not SCS
             e1 = expt
-            motdata = amparser.mapSCSdata(row,i)
+            (mandata, motdata) = amparser.mapSCSdata(row,i)
             e1.attrs.mset(motdata)
             msg = 'Amunet experiment updated with SCS: '+ motid
 
         elif(len(expt.xpath('opex:SCS')) > 0 and len(expt.xpath('opex:AEV')) == 0 and 'AEV_Average total error' in row):  # loaded SCS data but not AEV
             e1 = expt
-            motdata = amparser.mapAEVdata(row,i)
+            (mandata, motdata) = amparser.mapAEVdata(row,i)
             e1.attrs.mset(motdata)
             msg = 'Amunet experiment updated with AEV: '+ motid
         else:
             msg = 'Amunet experiment already exists: ' + motid
         return msg
 
-    def outputChecks(self,matches, missing, inputdir,filename):
-        import csv
-        match_filename = join(inputdir,"matched_" + filename)
-        missing_filename= join(inputdir,"missing_" + filename)
+
+    def uploadData(self,project,dp):
+        """
+        Upload data via specific Data parser
+        :param dp:
+        :return: missing and matches
+        """
+        missing=[]
+        matches=[]
+        dp.sortSubjects()
+        for sd in dp.subjects:
+            print('ID:', sd)
+            s = project.subject(sd)
+            if not s.exists():
+                if self.args.create is not None and self.args.create:
+                    # create subject in database
+                    skwargs = dp.getSubjectData(sd)
+                    s = self.xnat.createSubject(projectcode, sd, skwargs)
+                    logging.info('Subject created: ' + sd)
+                    print('Subject created: ' + sd)
+                else:
+                    missing.append({"ID": sd, "rows": dp.subjects[sd]})
+                    logging.warning('Subject does not exist - skipping:' + sd)
+                    continue
+            # Load data PER ROW
+            matches.append(sd)
+            if self.args.checks is None or not self.args.checks: #Don't upload if checks
+                for i, row in dp.subjects[sd].iterrows():
+                    if self.args.skiprows is not None and self.args.skiprows and \
+                            (('NOT RUN' in row.values) or ('ABORT' in row.values)):
+                        print("Skipping due to ABORT or NOT RUN")
+                        continue
+                    row.replace(np.nan, '', inplace=True)
+                    sampleid = dp.getSampleid(sd, row)
+
+                    # Sample
+                    xsdtypes = dp.getxsd()
+                    if ('amunet' in xsdtypes):
+                        msg = self.loadAMUNETdata(sampleid, i, row, s, dp)
+                        logging.info(msg)
+                        print(msg)
+                    else: #cantab and ACER
+                        for type in xsdtypes.keys():
+                            (mandata, data) = dp.mapData(row, i, type)
+                            xsd = xsdtypes[type]
+                            msg = self.loadSampledata(s, xsd, type + "_" + sampleid, mandata, data)
+                            logging.info(msg)
+                            print(msg)
+        return (missing,matches)
+
+
+    def outputChecks(self,projectcode,matches, missing, inputdir,f2):
+        """
+        Test run without actual uploading
+        :param matches: List of matched participant IDs
+        :param missing: Data rows for missing participants
+        :param inputdir: Data directory
+        :param filename: Report filename
+        :return: report filenames of missing and matched files
+        """
+        reportdir = join(inputdir, "report")
+        if not os.path.exists(reportdir):
+            os.mkdir(reportdir)
+        filename = os.path.basename(f2)
+        match_filename = join(reportdir,filename + "_matched.csv" )
+        missing_filename= join(reportdir,filename + "_missing.csv" )
         with open(match_filename, 'wb') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',')
             spamwriter.writerow(['Matched ID'])
             for m in sorted(matches):
                 spamwriter.writerow([m])
-        #spamwriter.close()
+
         #Missing subjects
         with open(missing_filename, 'wb') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',')
-            spamwriter.writerow(['Missing ID', 'DOB','Gender','Possible ID'])
+            spamwriter.writerow(['Missing participants in XNAT'])
+            sids = self.xnat.get_subjects(projectcode)
             for m in missing:
                 rootid = m['ID'][0:4]
-                guess = [s for s in matches if rootid in s]
+                guess = [s.label() for s in sids if rootid in s.label()]
                 if len(guess) <= 0:
                     guess=""
-                spamwriter.writerow([m['ID'],
-                                     m['info']['dob'],
-                                     m['info']['gender'],
-                                     guess])
-        #spamwriter.close()
+                else:
+                    guess="Possible ID: " + ",".join(guess)
+                spamwriter.writerow([m['ID'], guess])
+                for i, row in m['rows'].iterrows():
+                    spamwriter.writerow(row)
+
+        if self.args.checks is not None and self.args.checks:
+            msg = "*******TEST RUN ONLY*******\n"
+        else:
+            msg = "*******XNAT UPLOADED*******\n"
+
+        msg = "%sMatched participants: %d\nMissing participants: %d\n" % (
+            msg, len(matches), len(missing))
+        logging.info(msg)
+        print(msg)
+
         return (match_filename,missing_filename)
 
 ########################################################################
@@ -148,21 +218,18 @@ if __name__ == "__main__":
     parser.add_argument('projectcode', action='store', help='select project by code')
     parser.add_argument('--projects', action='store_true', help='list projects')
     parser.add_argument('--subjects', action='store_true', help='list subjects')
-    parser.add_argument('--su', action='store', help='Upload a list of participants')
-    parser.add_argument('--g', action='store', help='get XNAT ID for subject ID')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
     parser.add_argument('--fields', action='store', help='CANTAB fields to extract',
-                        default="resources\\cantab_fields.csv")
-    parser.add_argument('--checks', action='store', help='CANTAB test run with output to files',
-                        default="cantab_checks.csv")
+                        default="cantab_fields.csv")
+    parser.add_argument('--checks', action='store_true', help='Test run with output to files')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--u', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
-    parser.add_argument('--r', action='store', help='Report')
+
     args = parser.parse_args()
     uploader = OPEXUploader(args)
     uploader.config()
@@ -177,6 +244,9 @@ if __name__ == "__main__":
             #Check project code is correct
             projectcode = uploader.args.projectcode
             p = uploader.xnat.get_project(projectcode)
+            #Test run
+            missing = []
+            matches = []
             if (not p.exists()):
                 msg = "This project [%s] does not exist in this database [%s]" % (projectcode, uploader.args.database)
                 raise ConnectionError(msg)
@@ -190,11 +260,6 @@ if __name__ == "__main__":
                 projlist = uploader.xnat.list_projects()
                 for p in projlist:
                     print("Project: ", p.id())
-            # Lookup XNAT ID for a participant ID
-            if (uploader.args.g is not None and uploader.args.g):
-                subjectid = uploader.args.g
-                sid = uploader.xnat.get_subjectid_bylabel(projectcode, subjectid)
-                print("XNAT ID=%s for subject ID=%s" % (sid, subjectid))
             # Upload MRI scans from directory
             if (uploader.args.u is not None and uploader.args.u):
                 uploaddir = uploader.args.u  # Top level DIR FOR SCANS
@@ -209,26 +274,12 @@ if __name__ == "__main__":
                 else:
                     msg = "Directory path cannot be found: %s" % uploaddir
                     raise IOError(msg)
-            # Upload Participants from single file
-            if (uploader.args.su is not None and uploader.args.su):
-                uploadfile = uploader.args.su  # file expected
-                if access(uploadfile, R_OK):
-                    fid = uploader.upload_Participants(projectcode, uploadfile)
-                    if fid == 0:
-                        msg = 'Upload not successful - 0 participants uploaded'
-                        raise ValueError(msg)
-                    else:
-                        logging.info("Participants uploaded: %d", fid)
-                else:
-                    msg = "Directory path cannot be found: %s" % uploadfile
-                    raise IOError(msg)
             # Upload CANTAB data from directory
             if (uploader.args.cantab is not None and uploader.args.cantab):
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
-                cantabfields = uploader.args.fields
-                missing =[]
-                matches =[]
+                cantabfields = os.path.join("resources",uploader.args.fields)
+
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
                     seriespattern = '*.*'
@@ -239,48 +290,13 @@ if __name__ == "__main__":
                         for f2 in files:
                             print("Loading", f2)
                             dp = CantabParser(cantabfields,f2, sheet)
-                            dp.sortSubjects()
-
-                            for sd in dp.subjects:
-                                print('ID:', sd)
-                                s = project.subject(sd)
-                                if not s.exists():
-                                    if uploader.args.create is not None and uploader.args.create:
-                                        #create subject in database
-                                        skwargs = dp.getSubjectData(sd)
-                                        s = uploader.xnat.createSubject(projectcode,sd, skwargs)
-                                        logging.info('Subject created: ' + sd)
-                                        print('Subject created: ' + sd)
-                                    else:
-                                        missing.append({"ID":sd,"info":dp.getSubjectData(sd)})
-                                        logging.warning('Subject does not exist - skipping:' + sd)
-                                        continue
-                                #Load data PER ROW
-                                matches.append(sd)
-                                if uploader.args.checks is None:
-                                    for i, row in dp.subjects[sd].iterrows():
-                                        if uploader.args.skiprows is not None and \
-                                                uploader.args.skiprows and \
-                                                str(row['DMS Recommended Standard Status']) in ['NOT_RUN', 'ABORTED']:
-                                            continue
-                                        row.replace(np.nan, '', inplace=True)
-                                        sampleid = dp.getSampleid(sd, row)
-                                        print(i, 'Visit:', row['Visit Identifier'], 'EXPT ID', sampleid)
-                                        #Sample
-                                        xsdtypes = dp.getxsd()
-                                        for type in xsdtypes.keys():
-                                            (mandata,data) = dp.mapData(row, i, type)
-                                            xsd = xsdtypes[type]
-                                            msg = uploader.loadSampledata(s, xsd, type+ "_" + sampleid, mandata,data)
-                                            logging.info(msg)
-                                            print(msg)
-                        #Output matches and missing
-                        if uploader.args.checks is not None:
-                            reportdir = join(inputdir,"report")
-                            (out1,out2)=uploader.outputChecks(matches, missing, reportdir, args.checks)
-                            print("Outputfiles:", out1, " ", out2)
-
-
+                            (missing,matches) = uploader.uploadData(project,dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                print(msg)
+                                logging.info(msg)
 
                     except:
                         e = sys.exc_info()[0]
@@ -303,36 +319,19 @@ if __name__ == "__main__":
                         for f2 in files:
                             print("Loading", f2)
                             dp = AmunetParser(f2, sheet)
-                            dp.sortSubjects()
-
-                            for sd in dp.subjects:
-                                print('ID:', sd)
-                                s = project.subject(sd)
-                                if not s.exists():
-                                    if uploader.args.create is not None and uploader.args.create:
-                                        #create subject in database
-                                        skwargs = dp.getSubjectData(sd)
-                                        s = uploader.xnat.createSubject(projectcode,sd, skwargs)
-                                        logging.info('Subject created: ' + sd)
-                                        print('Subject created: ' + sd)
-                                    else:
-                                        logging.warning('Subject does not exist - skipping:' + sd)
-                                        continue
-                                #Load data PER ROW
-                                for i, row in dp.subjects[sd].iterrows():
-                                    sampleid = dp.getSampleid(sd,row)
-                                    print(i, 'Visit:', row['S_Visit'], 'EXPT ID', sampleid)
-                                    row.replace(np.nan,'', inplace=True)
-                                    msg = uploader.loadAMUNETdata(sampleid,i,row,s,dp)
-                                    logging.info(msg)
-                                    print(msg)
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                print(msg)
+                                logging.info(msg)
 
                     except:
                         e = sys.exc_info()[0]
                         raise ValueError(e)
                 else:
-                    raise IOError(msg)
-
+                    raise IOError("Input dir error")
             ### Upload ACE-R data from directory
             if (uploader.args.acer is not None and uploader.args.acer):
                 sheet = "1"
@@ -347,37 +346,19 @@ if __name__ == "__main__":
                         for f2 in files:
                             print("Loading", f2)
                             dp = AcerParser(f2, sheet)
-                            dp.sortSubjects()
-
-                            for sd in dp.subjects:
-                                print('ID:', sd)
-                                s = project.subject(sd)
-                                if not s.exists():
-                                    if uploader.args.create is not None and uploader.args.create:
-                                        # create subject in database
-                                        skwargs = dp.getSubjectData(sd)
-                                        s = uploader.xnat.createSubject(projectcode, sd, skwargs)
-                                        logging.info('Subject created: ' + sd)
-                                        print('Subject created: ' + sd)
-                                    else:
-                                        logging.warning('Subject does not exist - skipping:' + sd)
-                                        continue
-                                # Load data PER ROW
-                                for i, row in dp.subjects[sd].iterrows():
-                                    sampleid = dp.getSampleid(sd, row)
-                                    print(i, 'EXPT ID', sampleid)
-                                    row.replace(np.nan, '', inplace=True)
-                                    data = dp.mapData(row, i)
-                                    xsd = dp.getXsd()
-                                    msg = uploader.loadSampledata(s, xsd, sampleid, data)
-                                    logging.info(msg)
-                                    print(msg)
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1,out2)
+                                print(msg)
+                                logging.info(msg)
 
                     except:
                         e = sys.exc_info()[0]
                         raise ValueError(e)
                 else:
-                    raise IOError(msg)
+                    raise IOError("Input dir error")
 
         else:
             raise ConnectionError("Connection failed - check config")
