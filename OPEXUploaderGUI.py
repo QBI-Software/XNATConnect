@@ -2,6 +2,8 @@ import sys
 import logging
 import os
 import pyforms
+## pip install git+https://github.com/UmSenhorQualquer/pyforms.git --upgrade
+## pip install git+https://github.com/UmSenhorQualquer/pysettings.git --upgrade
 import subprocess
 from os.path import isdir, join
 from subprocess import check_output,STDOUT
