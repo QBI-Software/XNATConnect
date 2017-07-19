@@ -39,6 +39,14 @@ class XnatConnector:
         self.conn = pyxnat.Interface(server=self.url, user=self.user, verify=True,
                                      password=self.passwd, cachedir='/tmp')  # connection object
 
+    def testconnection(self):
+        """
+        Test connection actually exists by returning some data
+        :return: true or false
+        """
+        testconn = self.conn.inspect.datatypes('xnat:subjectData')
+        return (len(testconn) > 0)
+
     def get_project(self, projectcode):
         if not self.conn:
             self.connect()

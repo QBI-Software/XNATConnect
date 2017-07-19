@@ -138,6 +138,46 @@ class CantabParser(DataParser):
             motdata[xsd + '/' + ctab] = str(row[ctab])
         return (mandata, motdata)
 
+
+    def getDFExpts(self,expts, interval, prefix=None):
+        """
+        Load expts as dataframe
+        :param expts: collection of specific type of expt eg cantabMOT
+        :param interval: which interval or * for all
+        :param prefix: expt type prefix for getting fields
+        :return: fully loaded valid data as dataframe
+        """
+        teste = expts.fetchone()
+        xsd = teste.datatype()
+        if prefix is None:
+            prefix = [key for key,val in self.getxsd().iteritems() if val == xsd][0]
+
+        ##Checking OK
+        print(teste.get())
+        print("DEBUG: Label=", teste.attrs.get('label'))
+        print("DEBUG: Status=", teste.attrs.get(xsd +'/status'))
+        ##Filter valid data
+        df_expts = pandas.DataFrame([(e.attrs.get(xsd +'/interval'),
+                                      e.attrs.get(xsd +'/data_valid'),
+                                      e.attrs.get(xsd +'/sample_quality'), e) for e in expts],
+                                    columns=['Interval', 'Valid', 'Quality', 'expt'])
+        df = df_expts[(df_expts.Valid != "Invalid") & (df_expts.Quality != "Poor") & (df_expts.Interval == interval)]
+        #generate columns with fields
+        ##TODO: This is too slow and cumbersome - maybe parse xml and load per row not per column
+        #see http://www.austintaylor.io/lxml/python/pandas/xml/dataframe/2016/07/08/convert-xml-to-pandas-dataframe/
+        for field in self.cantabfields[prefix].dropna():
+            fieldvals = []
+            print("loading field=", field)
+            for exp in df.expt:
+                #print(exp.attrs.get(xsd + '/' + field.lower()))
+                fieldvals.append(exp.attrs.get(xsd + '/' + field.lower()))
+            df[field]=fieldvals
+        #remove column with objects
+        df.drop('expt', axis=1, inplace=True)
+        #print(df)
+        return df
+
+
     def getSubjectData(self,sd):
         """
         Load subject data from input data

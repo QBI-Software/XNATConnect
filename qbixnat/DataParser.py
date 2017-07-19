@@ -24,11 +24,11 @@ class DataParser(object):
 
     def __init__(self, datafile, sheet='1'):
         self.datafile = datafile #full pathname to data file
-        if (len(datafile)> 0):
+        if (datafile is not None and len(datafile)> 0):
             (bname, extn)= splitext(basename(datafile))
-        self.type = extn #extension - xlsx or csv
-        self.sheet = sheet
-        self._loadData()
+            self.type = extn #extension - xlsx or csv
+            self.sheet = sheet
+            self._loadData()
 
     def _loadData(self):
         if self.type =='.xlsx':

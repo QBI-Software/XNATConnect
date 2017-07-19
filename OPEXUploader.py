@@ -50,7 +50,6 @@ class OPEXUploader():
         self.xnat.conn.disconnect()
 
 
-
     def loadSampledata(self,subject, samplexsd, sampleid, mandata,sampledata):
         """ Loads sample data from CANTAB data dump
         Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
@@ -237,8 +236,7 @@ if __name__ == "__main__":
     logging.info('Connecting to Server:%s Project:%s', uploader.args.database, uploader.args.projectcode)
 
     try:
-        testconn = uploader.xnat.conn.inspect.datatypes('xnat:subjectData')
-        if len(testconn) > 0:
+        if uploader.xnat.testconnection():
             logging.info("...Connected")
             print("Connected")
             #Check project code is correct
