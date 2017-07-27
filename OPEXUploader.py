@@ -60,7 +60,12 @@ class OPEXUploader():
         :return: msg for logging
         """
         expt = subject.experiment(sampleid)
-        if not expt.exists():
+        if (self.args.update is not None):
+            update = self.args.update
+        else:
+            update = False
+
+        if not expt.exists() or update:
             self.xnat.createExperiment(subject, samplexsd, sampleid, mandata,sampledata)
             msg = 'Experiment created:' + sampleid
         else:
@@ -222,11 +227,12 @@ if __name__ == "__main__":
     parser.add_argument('--fields', action='store', help='CANTAB fields to extract',
                         default="cantab_fields.csv")
     parser.add_argument('--checks', action='store_true', help='Test run with output to files')
+    parser.add_argument('--update', action='store_true', help='Also update existing data')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
-    parser.add_argument('--u', action='store',
+    parser.add_argument('--mri', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
 
     args = parser.parse_args()
@@ -259,8 +265,8 @@ if __name__ == "__main__":
                 for p in projlist:
                     print("Project: ", p.id())
             # Upload MRI scans from directory
-            if (uploader.args.u is not None and uploader.args.u):
-                uploaddir = uploader.args.u  # Top level DIR FOR SCANS
+            if (uploader.args.mri is not None and uploader.args.mri):
+                uploaddir = uploader.args.mri  # Top level DIR FOR SCANS
                 # Directory structure data/subject_label/scans/session_id/*.dcm
                 if isdir(uploaddir):
                     fid = uploader.xnat.upload_MRIscans(projectcode, uploaddir)
@@ -277,7 +283,6 @@ if __name__ == "__main__":
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
                 cantabfields = os.path.join("resources",uploader.args.fields)
-
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
                     seriespattern = '*.*'

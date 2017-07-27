@@ -31,7 +31,7 @@ class DataParser(object):
             self._loadData()
 
     def _loadData(self):
-        if self.type =='.xlsx':
+        if self.type =='.xlsx' or self.type == '.xls':
             self.data = pandas.read_excel(self.datafile, self.sheet)
         elif self.type == '.csv':
             self.data = pandas.read_csv(self.datafile)
