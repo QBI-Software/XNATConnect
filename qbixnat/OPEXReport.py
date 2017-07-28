@@ -10,18 +10,13 @@ Created on Thu Mar 2 2017
 @author: Liz Cooper-Williams, QBI
 """
 
-import argparse
-import glob
-import re
 from datetime import datetime
-from os import R_OK, access
-from os.path import join, basename, splitext
-
-import pandas
-import numpy as np
-import matplotlib.mlab as mlab
-import matplotlib.pyplot as plt
 from os.path import expanduser
+from os.path import join
+
+import numpy as np
+import pandas
+
 from qbixnat.CantabParser import CantabParser
 
 
