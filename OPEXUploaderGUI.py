@@ -28,7 +28,7 @@ class OPEXUploaderGUI(wx.Frame):
         pos_y += line_height
         self.inputlabel = wx.StaticText(self.panel, label="Input dir :", pos=(pos_x[0], pos_y))
         self.inputedit = wx.TextCtrl(self.panel, pos=(pos_x[1], pos_y), size=(340, -1))
-        self.Bind(wx.EVT_BUTTON, self.EvtInput, self.inputedit)
+        self.Bind(wx.EVT_TEXT, self.EvtInput, self.inputedit)
 
         pos_y += line_height
         self.optionlist = {'Help': '--help',
@@ -143,7 +143,7 @@ class OPEXUploaderGUI(wx.Frame):
                 self.StatusBar.SetStatusText(msg)
                 print >> sys.stderr, msg
             else:
-                msg = "Program complete [" + str(retcode) + "] - check output"
+                msg = "Program error [" + str(retcode) + "] - check output"
                 self.StatusBar.SetStatusText(msg)
                 print >> sys.stderr, msg
         except OSError as e:
@@ -151,7 +151,9 @@ class OPEXUploaderGUI(wx.Frame):
             print >> sys.stderr, msg
 
     def __cancelAction(self):
-        logging.info('Cancelled by request')
+        msg = 'Cancelled by request'
+        self.StatusBar.SetStatusText(msg)
+        logging.info(msg)
         sys.exit(0)
 
 #Execute the application
