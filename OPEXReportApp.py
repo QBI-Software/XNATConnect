@@ -83,13 +83,12 @@ if __name__ == '__main__':
             df = report.getParticipants()
             print('Data loaded:', df)
             op.app.layout = op.participants_layout(df) #reactive loading
-            proj = xnat.get_project(projectcode)
-            expts = proj.experiments("MOT")
-            teste = expts.fetchone()
-            teste.attrs.get('label')
-            teste.attrs.get('status')
-            atts = teste.attrs
-            df1 = report.getMultivariate(expts)
+            # proj = xnat.get_project(projectcode)
+            # xsd = "MOT"
+            # expts = proj.experiments(xsd + "*")  # prefix of labels/ids
+            # teste = expts.fetchone()
+            # if (teste is not None):
+            #     print(teste.label())
             op.app.run_server(debug=True, port=8089)
         else:
             print "No subjects found - Check PROJECT CODE is correct"
