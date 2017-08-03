@@ -129,7 +129,12 @@ class OPEXUploaderGUI(wx.Frame):
         print options
         s =" "
         cwd = join(os.getcwd(), "OPEXUploader.py")
-        cmd = "D:\\Programs\\Anaconda2\\python.exe " + cwd + " " + s.join(options)
+        if (os.environ.has_attrs('PYTHONEXE')):
+            pythoncmd = os.environ('PYTHONEXE')
+        else:
+            pythoncmd = sys.prefix + os.sep + "Scripts" + os.sep + "python.exe"
+
+        cmd = pythoncmd + " " + cwd + " " + s.join(options)
         print(cmd)
         msg=""
         try:

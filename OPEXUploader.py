@@ -93,6 +93,7 @@ class OPEXUploader():
                 (mandata,motdata) = amparser.mapAEVdata(row,i)
             else:
                 (mandata, motdata) = amparser.mapSCSdata(row,i)
+            #motdata[motxsd + '/date'] = amparser.dates[motid]
             self.xnat.createExperiment(subject, motxsd, motid, mandata,motdata)
             msg = 'Amunet experiment created:' + motid
 
@@ -139,12 +140,14 @@ class OPEXUploader():
             matches.append(sd)
             if self.args.checks is None or not self.args.checks: #Don't upload if checks
                 for i, row in dp.subjects[sd].iterrows():
+                    sampleid = dp.getSampleid(sd, row)
                     if self.args.skiprows is not None and self.args.skiprows and \
-                            (('NOT RUN' in row.values) or ('ABORT' in row.values)):
-                        print("Skipping due to ABORT or NOT RUN")
+                            (('NOT_RUN' in row.values) or ('ABORTED' in row.values)):
+                        msg = "Skipping due to ABORT or NOT RUN: %s" % sampleid
+                        logging.warning(msg)
+                        print(msg)
                         continue
                     row.replace(np.nan, '', inplace=True)
-                    sampleid = dp.getSampleid(sd, row)
 
                     # Sample
                     xsdtypes = dp.getxsd()
@@ -197,7 +200,10 @@ class OPEXUploader():
                     guess="Possible ID: " + ",".join(guess)
                 spamwriter.writerow([m['ID'], guess])
                 for i, row in m['rows'].iterrows():
-                    spamwriter.writerow(row)
+                    if ('Row Number' in row):
+                        spamwriter.writerow(["Row:", row['Row Number']])
+                    else:
+                        spamwriter.writerow(["Row:", i])
 
         if self.args.checks is not None and self.args.checks:
             msg = "*******TEST RUN ONLY*******\n"
@@ -230,6 +236,7 @@ if __name__ == "__main__":
     parser.add_argument('--update', action='store_true', help='Also update existing data')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
+    parser.add_argument('--amunetpath',action='store',help='Extract date info from orig files in this dir')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--mri', action='store',
@@ -322,6 +329,7 @@ if __name__ == "__main__":
                         for f2 in files:
                             print("Loading", f2)
                             dp = AmunetParser(f2, sheet)
+                            dp.extractDateInfo(uploader.args.amunetpath)
                             (missing, matches) = uploader.uploadData(project, dp)
                             # Output matches and missing
                             if len(matches) > 0 or len(missing) > 0:

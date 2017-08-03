@@ -11,27 +11,28 @@ Created on Thu Mar 2 2017
 """
 
 import argparse
+import fnmatch
 import glob
 import re
-import shutil
 import sys
-from datetime import datetime
-from os import listdir, R_OK, path, mkdir, access
-from os.path import isdir, join, basename, splitext
+import csv
+from datetime import datetime, date
+from os import listdir, R_OK, access
+from os.path import join, isfile
+
 from qbixnat.DataParser import DataParser
 
-import pandas
 
 class AmunetParser(DataParser):
 
     def __init__(self, *args):
         #super(AmunetParser, self).__init__(*args) - PYTHON V3
         DataParser.__init__(self, *args)
-
+        self.dates = dict()
+        self.subjects = dict()
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
-        self.subjects = dict()
         if self.data is not None:
             ids = self.data['S_Full name'].unique()
             for sid in ids:
@@ -131,6 +132,41 @@ class AmunetParser(DataParser):
         dt = datetime.fromordinal(dateoffset + int(orig))
         return dt.strftime("%Y-%m-%d")
 
+    def extractDateInfo(self, dirpath):
+        seriespattern = '*.zip'
+        zipfiles = [f for f in listdir(dirpath) if (isfile(join(dirpath, f)) and fnmatch.fnmatch(f, seriespattern))]
+        print(zipfiles)
+        rid = re.compile('^(\d{4}.{2})')
+        rdate = re.compile('(\d{8})\.zip$')
+        for f in zipfiles:
+            fid = rid.search(f).group(0)
+            fdate = rdate.search(f).groups()[0]
+            #some dates are in reverse
+            try:
+                if (fdate[4:6]) == '20':
+                    fdateobj = date(int(fdate[4:9]), int(fdate[2:4]), int(fdate[0:2]))
+                else:
+                    fdateobj = date(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:9]))
+            except ValueError:
+                print "cannot create date from: ", fdate
+                continue
+
+
+            if self.dates.get(fid) is not None:
+                self.dates[fid].append(fdateobj)
+            else:
+                self.dates[fid] = [fdateobj]
+        print(self.dates)
+        #Output to a csvfile
+        csvfile = join(dirpath,'amunet_participantdates.csv')
+        writer = csv.writer(csvfile, delimiter=',')
+        for d,v in self.dates:
+            v.sort()
+            for datevals in v:
+                writer.writerow([d, datevals])
+
+
+
 ########################################################################
 
 if __name__ == "__main__":
@@ -141,6 +177,7 @@ if __name__ == "__main__":
              ''')
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\amunet")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="1")
+    parser.add_argument('--datelist', action='store', help='Generate list of dates from dir', default="1")
     args = parser.parse_args()
 
     inputdir = args.filedir
@@ -155,6 +192,8 @@ if __name__ == "__main__":
             for f2 in files:
                 print("Loading",f2)
                 cantab = AmunetParser(f2,sheet)
+                if args.datelist is not None:
+                    cantab.extractDateInfo(args.datelist)
                 cantab.sortSubjects()
                 print('Subject summary')
                 for sd in cantab.subjects:

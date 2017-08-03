@@ -32,13 +32,14 @@ class DataParser(object):
 
     def _loadData(self):
         if self.type =='.xlsx' or self.type == '.xls':
-            self.data = pandas.read_excel(self.datafile, self.sheet)
+            self.data = pandas.read_excel(self.datafile, self.sheet, skip_blank_lines=True)
         elif self.type == '.csv':
-            self.data = pandas.read_csv(self.datafile)
+            self.data = pandas.read_csv(self.datafile, skip_blank_lines=True)
         else:
             self.data = None
         if self.data is not None:
             print('Data loaded')
+            self.data.dropna(inplace=True) #cleanup
         else:
             print('No data to load')
 

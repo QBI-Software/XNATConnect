@@ -170,6 +170,21 @@ class XnatConnector:
             label = prefix + "_" + str(c)
         return label
 
+    def changeExptLabel(self,oldlabel, newlabel):
+        qry = '/projects/*/subjects/*/experiments'
+        expts = self.conn.select(qry)
+        elist = [e for e in expts if e.label() == oldlabel]
+
+        if len(elist) == 1:
+            expt = elist[0]
+            print "Old:", expt.label()
+            expt.attrs.set('label', newlabel)
+            print "New:", expt.label()
+        elif len(elist) > 1:
+            print "More than one expt found with label=", oldlabel
+        else:
+            print("No expts found with label=", oldlabel)
+
     def upload_MRIscans(self, projectcode, scandir):
         """
         Upload MRI scans from scandir to project
@@ -335,7 +350,7 @@ if __name__ == "__main__":
     # get current user's login details (linux) or local file (windows)
     home = expanduser("~")
     configfile = join(home, '.xnat.cfg')
-    parser = argparse.ArgumentParser(prog='qbixnat_manager',
+    parser = argparse.ArgumentParser(prog='XnatConnector',
         description='''\
         XnatConnector: Script for managing data in QBI XNAT db
          ''')
@@ -344,9 +359,12 @@ if __name__ == "__main__":
     parser.add_argument('--p', action='store_true', help='list projects')
     parser.add_argument('--s', action='store_true', help='list subjects')
     parser.add_argument('--x', action='store_true', help='delete subjects')
+    parser.add_argument('--c1', action='store', help='change expt label from')
+    parser.add_argument('--c2', action='store', help='change expt label to')
+    parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     #Tests
-    args = parser.parse_args(['xnat-dev', 'TEST_PJ00', '--p']) #Preset
-
+    #args = parser.parse_args(['xnat-dev', 'TEST_PJ00', '--p']) #Preset
+    args = parser.parse_args()
     print args
     xnat = XnatConnector(configfile, args.database)
     print "Connecting to URL=", xnat.url
@@ -366,6 +384,8 @@ if __name__ == "__main__":
             for p in projlist:
                 print "Project: ", p.id()
 
+        if (args.c1 is not None and args.c2 is not None):
+            xnat.changeExptLabel(args.c1, args.c2)
 
         xnat.conn.disconnect()
         print("FINISHED")
