@@ -6,10 +6,11 @@ import sys
 import csv
 import re
 import numpy as np
-from datetime import datetime
+import pandas
 from os import R_OK, access
 from os.path import expanduser
 from os.path import isdir, join
+from datetime import datetime, date
 from requests.exceptions import ConnectionError
 from qbixnat.CantabParser import CantabParser
 from qbixnat.AmunetParser import AmunetParser
@@ -217,6 +218,49 @@ class OPEXUploader():
 
         return (match_filename,missing_filename)
 
+    def extractDateInfo(self, dirpath, ext='zip'):
+        """
+        Extract date from filenames with ext
+        :param dirpath: directory with files
+        :param ext: extension of files to filter
+        :return: list of participants with dates in sequence
+        """
+        participantdates = dict()
+        seriespattern = '*.' + ext
+        zipfiles = glob.glob(join(dirpath, seriespattern))
+        print("Total files: ", len(zipfiles))
+        #Extract date from filename - expect
+        rid = re.compile('^(\d{4}.{2})')
+        rdate = re.compile('(\d{8})\.zip$')
+        for filename in zipfiles:
+            f = os.path.basename(filename)
+
+            #some dates are in reverse
+            try:
+                if (rid.search(f) and rdate.search(f)):
+                    fid = rid.search(f).group(0).upper()
+                    fdate = rdate.search(f).groups()[0]
+                    if (fdate[4:6]) == '20':
+                        fdateobj = date(int(fdate[4:9]), int(fdate[2:4]), int(fdate[0:2]))
+                    else:
+                        fdateobj = date(int(fdate[0:4]), int(fdate[4:6]), int(fdate[6:9]))
+                else:
+                    raise ValueError("Cannot parse date")
+            except ValueError as e:
+                msg = "Error: %s: %s" % (e, f)
+                logging.error(msg)
+                continue
+
+
+            if participantdates.get(fid) is not None:
+                participantdates[fid].append(fdateobj)
+            else:
+                participantdates[fid] = [fdateobj]
+
+        print "Loaded:", len(participantdates)
+        return participantdates
+
+
 ########################################################################
 if __name__ == "__main__":
 
@@ -236,7 +280,7 @@ if __name__ == "__main__":
     parser.add_argument('--update', action='store_true', help='Also update existing data')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
-    parser.add_argument('--amunetpath',action='store',help='Extract date info from orig files in this dir')
+    parser.add_argument('--amunetdates',action='store', help='Extract date info from orig files in this dir')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--mri', action='store',
@@ -292,21 +336,22 @@ if __name__ == "__main__":
                 cantabfields = os.path.join("resources",uploader.args.fields)
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
-                    seriespattern = '*.*'
+                    seriespattern = '*.csv'
                     try:
                         files = glob.glob(join(inputdir, seriespattern))
                         print("Files:", len(files))
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
-                            print("Loading", f2)
-                            dp = CantabParser(cantabfields,f2, sheet)
-                            (missing,matches) = uploader.uploadData(project,dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
+                            if ("RowBySession" in f2):
+                                print("Loading", f2)
+                                dp = CantabParser(cantabfields,f2, sheet)
+                                (missing,matches) = uploader.uploadData(project,dp)
+                                # Output matches and missing
+                                if len(matches) > 0 or len(missing) > 0:
+                                    (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                                    msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                    print(msg)
+                                    logging.info(msg)
 
                     except:
                         e = sys.exc_info()[0]
@@ -329,7 +374,7 @@ if __name__ == "__main__":
                         for f2 in files:
                             print("Loading", f2)
                             dp = AmunetParser(f2, sheet)
-                            dp.extractDateInfo(uploader.args.amunetpath)
+                            #dp.extractDateInfo(uploader.args.amunetpath)
                             (missing, matches) = uploader.uploadData(project, dp)
                             # Output matches and missing
                             if len(matches) > 0 or len(missing) > 0:
@@ -343,6 +388,27 @@ if __name__ == "__main__":
                         raise ValueError(e)
                 else:
                     raise IOError("Input dir error")
+            if (uploader.args.amunetdates is not None and uploader.args.amunetdates):
+                dirpath = uploader.args.amunetdates
+                if access(dirpath, R_OK):
+                    pdates = uploader.extractDateInfo(dirpath, ext='zip')
+                    # Output to a csvfile
+                    csvfile = join(dirpath, 'amunet_participantdates.csv')
+                    try:
+                        with open(csvfile, 'wb') as f:
+                            writer = csv.writer(f)
+                            for d in pdates:
+                                vdates = pandas.Series(pdates[d])
+                                vdates = vdates.unique()
+                                writer.writerow([d, ",".join([v.isoformat() for v in vdates])])
+                            print("Participant dates written to: ", csvfile)
+                    except IOError as e:
+                        logging.error("Unable to access file for writing: ", e)
+                        print e
+                    finally:
+                        print("Finished")
+                        #writer.close()
+
             ### Upload ACE-R data from directory
             if (uploader.args.acer is not None and uploader.args.acer):
                 sheet = "1"

@@ -16,6 +16,7 @@ import glob
 import re
 import sys
 import csv
+import pandas
 from datetime import datetime, date
 from os import listdir, R_OK, access
 from os.path import join, isfile
@@ -139,7 +140,7 @@ class AmunetParser(DataParser):
         rid = re.compile('^(\d{4}.{2})')
         rdate = re.compile('(\d{8})\.zip$')
         for f in zipfiles:
-            fid = rid.search(f).group(0)
+            fid = rid.search(f).group(0).upper()
             fdate = rdate.search(f).groups()[0]
             #some dates are in reverse
             try:
@@ -156,14 +157,16 @@ class AmunetParser(DataParser):
                 self.dates[fid].append(fdateobj)
             else:
                 self.dates[fid] = [fdateobj]
+
         print(self.dates)
         #Output to a csvfile
         csvfile = join(dirpath,'amunet_participantdates.csv')
-        writer = csv.writer(csvfile, delimiter=',')
-        for d,v in self.dates:
-            v.sort()
-            for datevals in v:
-                writer.writerow([d, datevals])
+        with open(csvfile, 'wb') as f:
+            writer = csv.writer(f)
+            for d in self.dates:
+                vdates = pandas.Series(self.dates[d])
+                self.dates[d] = vdates.unique()
+                writer.writerow([d, [v.isoformat() for v in self.dates[d]]])
 
 
 
