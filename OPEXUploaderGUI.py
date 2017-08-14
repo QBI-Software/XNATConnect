@@ -129,7 +129,7 @@ class OPEXUploaderGUI(wx.Frame):
         print options
         s =" "
         cwd = join(os.getcwd(), "OPEXUploader.py")
-        if (os.environ.has_attrs('PYTHONEXE')):
+        if ('PYTHONEXE' in os.environ):
             pythoncmd = os.environ('PYTHONEXE')
         else:
             pythoncmd = sys.prefix + os.sep + "Scripts" + os.sep + "python.exe"
