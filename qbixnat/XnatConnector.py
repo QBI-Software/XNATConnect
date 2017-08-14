@@ -345,6 +345,33 @@ class XnatConnector:
             if project.subject(sid).exists():
                 print "ERROR: Couldn't delete ID=", sid
 
+    def delete_experiments(self, projectcode, datatype, fields):
+        """
+        Removes experiments with corresponding field-values
+        """
+        #expts = self.conn.inspect.experiment_values(datatype, projectcode)
+        project = self.get_project(projectcode)
+        row = datatype
+        for field in fields:
+            fieldref = datatype + '/' + field
+            columns = [datatype + '/SUBJECT_ID', datatype + '/ID', fieldref]
+            criteria = [(fieldref, 'LIKE', fields[field]),
+                    'AND'
+                    ]
+            self.conn.manage.search.save('deleting', row, columns, criteria) #save search
+            elist = self.conn.manage.search.get('deleting') #run search
+            print datatype, " Expts to delete:", len(elist)
+            for e in elist:
+                print e
+                expt = project.experiment(e['expt_id'])
+                expt.delete()
+                if (project.experiment(e['expt_id']).exists()):
+                    print "ERROR: Couldn't delete Expt ID=", e['expt_id']
+                else:
+                    print "DELETED:", e['expt_id']
+            xnat.conn.manage.search.delete('deleting') #remove saved search
+
+
 ############################################################################################
 if __name__ == "__main__":
     # get current user's login details (linux) or local file (windows)
@@ -359,6 +386,7 @@ if __name__ == "__main__":
     parser.add_argument('--p', action='store_true', help='list projects')
     parser.add_argument('--s', action='store_true', help='list subjects')
     parser.add_argument('--x', action='store_true', help='delete subjects')
+    parser.add_argument('--m', action='store_true', help='delete experiments (opex,aborted)')
     parser.add_argument('--c1', action='store', help='change expt label from')
     parser.add_argument('--c2', action='store', help='change expt label to')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
@@ -386,6 +414,10 @@ if __name__ == "__main__":
 
         if (args.c1 is not None and args.c2 is not None):
             xnat.changeExptLabel(args.c1, args.c2)
+
+        if (args.m is not None and args.m):
+            for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
+                xnat.delete_experiments(projectcode,dtype,{'status': 'ABORTED'})
 
         xnat.conn.disconnect()
         print("FINISHED")
