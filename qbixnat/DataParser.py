@@ -39,7 +39,8 @@ class DataParser(object):
             self.data = None
         if self.data is not None:
             print('Data loaded')
-            self.data.dropna(inplace=True) #cleanup
+            self.data.dropna(how="all", axis=0, inplace=True) #cleanup if rows are all NaN
+            self.data.fillna("")  #replace remaining NaNs with empty string
         else:
             print('No data to load')
 
