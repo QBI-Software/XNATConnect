@@ -44,21 +44,53 @@ class AmunetParser(DataParser):
     def getxsd(self):
         return 'opex:amunet'
 
-    def mapAEVdata(self, row,i):
-        """
-        Maps required fields from input rows
-        :param row:
-        :return:
-        """
-        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
-        interval = int(visit.group(1)) - 1
-        xsd = self.getxsd()
+    def mapMandata(self, xsd, row, i):
+        #Get Visit if present (manual)
+        if ('Visit' in row):
+            interval = row['Visit']
+        elif row['S_Visit'] is not None:  #No overwrite
+            visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+            interval = int(visit.group(1))
+            if interval == 1:
+                interval = 0
+        else:
+            interval = 0
+
+
         mandata = {
             xsd + '/interval': str(interval),
             xsd + '/sample_id': str(i),  # row number in this data file for reference
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/data_valid': 'Initial'
         }
+        return mandata
+
+    def getVisitDate(self,row):
+        """
+        Gets visit date in correct format for uploading
+        :param row: reads field "Date" as yyyy-mm-dd
+        :return: string as yyyy.mm.dd 00:00:00
+        """
+        # Get Date if present (manual)
+        visitdate = None
+        if ('Date' in row):
+            visitdate = self.formatDobNumber(row['Date'])
+
+            # visitdate = visitdate.replace("-",".")
+            # visitdate = visitdate + " 00:00:00"
+        print "Visit date=", visitdate
+        return visitdate
+
+    def mapAEVdata(self, row,i):
+        """
+        Maps required fields from input rows
+        :param row:
+        :return:
+        """
+        xsd = self.getxsd()
+        mandata = self.mapMandata(xsd, row, i)
+        visitdate = self.getVisitDate(row)
+
         data = {
             xsd + '/AEVcomments': str(row['AEV_Lexical rating']),
             xsd + '/AEV': str(row['AEV_Average total error']),
@@ -67,6 +99,9 @@ class AmunetParser(DataParser):
             xsd + '/DV': str(row['DV_Average total error'])
 
         }
+        if (visitdate is not None):
+            data[xsd + '/date'] = visitdate
+
         return (mandata,data)
 
     def mapSCSdata(self,row,i):
@@ -76,15 +111,9 @@ class AmunetParser(DataParser):
         :param row:
         :return:
         """
-        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
-        interval = int(visit.group(1)) - 1
         xsd = self.getxsd()
-        mandata = {
-            xsd + '/interval': str(interval),
-            xsd + '/sample_id': str(i),  # row number in this data file for reference
-            xsd + '/sample_quality': 'Unknown',  # default - check later if an error
-            xsd + '/data_valid': 'Initial'
-        }
+        mandata = self.mapMandata(xsd, row, i)
+        visitdate = self.getVisitDate(row)
         data = {
             xsd + '/SCScomments': str(row['SCS_Lexical rating']),
             xsd + '/SCS': str(row['SCS_Average total error']),
@@ -94,6 +123,8 @@ class AmunetParser(DataParser):
             xsd + '/SES': str(row['SES_Average total error']),
             xsd + '/SED': str(row['SED_Average total error'])
         }
+        if (visitdate is not None):
+            data[xsd + '/date'] = visitdate
         return (mandata, data)
 
     def getSubjectData(self,sd):
@@ -117,21 +148,20 @@ class AmunetParser(DataParser):
 
     def getSampleid(self,sd, row):
         """
-        Generate a unique id for Amunet sample
+        Generate a unique id for Amunet sample which can be reproduced if this data reoccurs
         :param row:
         :return:
         """
-        visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
-        id = "AM_" + sd + "_" + visit.group(1)
+        #visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
+        if ('Date' in row):
+            uid = int(row['Date'])
+            uid = self.formatCondensedDate(uid)
+        else:
+            uid = sum([i for i in row if type(i) == float]) #create hash of values from row values
+            uid = int(uid)
+        id = "AM_" + sd + "_" + str(uid)
         return id
 
-    def formatDobNumber(self,orig):
-        """
-        Reformats DOB string from Amunet data float to yyyy-mm-dd
-        """
-        dateoffset = 693594
-        dt = datetime.fromordinal(dateoffset + int(orig))
-        return dt.strftime("%Y-%m-%d")
 
     def extractDateInfo(self, dirpath):
         seriespattern = '*.zip'

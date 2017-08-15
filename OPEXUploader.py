@@ -15,6 +15,7 @@ from requests.exceptions import ConnectionError
 from qbixnat.CantabParser import CantabParser
 from qbixnat.AmunetParser import AmunetParser
 from qbixnat.AcerParser import AcerParser
+from qbixnat.MridataParser import MridataParser
 from qbixnat.XnatConnector import XnatConnector
 
 
@@ -156,6 +157,12 @@ class OPEXUploader():
                         msg = self.loadAMUNETdata(sampleid, i, row, s, dp)
                         logging.info(msg)
                         print(msg)
+                    elif ('FS' in xsdtypes):
+                        xsd = dp.getxsd()[dp.mritype]
+                        (mandata, data) = dp.mapData(row, i, xsd)
+                        msg = self.loadSampledata(s, xsd, dp.mritype + "_" + sampleid, mandata, data)
+                        logging.info(msg)
+                        print(msg)
                     else: #cantab and ACER
                         for type in xsdtypes.keys():
                             (mandata, data) = dp.mapData(row, i, type)
@@ -274,7 +281,7 @@ if __name__ == "__main__":
     parser.add_argument('--subjects', action='store_true', help='list subjects')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
-    parser.add_argument('--fields', action='store', help='CANTAB fields to extract',
+    parser.add_argument('--fields', action='store', help='CANTAB or MRI fields to extract',
                         default="cantab_fields.csv")
     parser.add_argument('--checks', action='store_true', help='Test run with output to files')
     parser.add_argument('--update', action='store_true', help='Also update existing data')
@@ -283,6 +290,7 @@ if __name__ == "__main__":
     parser.add_argument('--amunetdates',action='store', help='Extract date info from orig files in this dir')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
+    parser.add_argument('--mridata', action='store', help='Upload MRI data from directory - detects ASHS or FreeSurf from filename')
     parser.add_argument('--mri', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
 
@@ -428,6 +436,36 @@ if __name__ == "__main__":
                             if len(matches) > 0 or len(missing) > 0:
                                 (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
                                 msg = "Reports created: \n\t%s\n\t%s" % (out1,out2)
+                                print(msg)
+                                logging.info(msg)
+
+                    except:
+                        e = sys.exc_info()[0]
+                        raise ValueError(e)
+                else:
+                    raise IOError("Input dir error")
+
+            ### Upload MRI data analysis from directory
+            if (uploader.args.mridata is not None and uploader.args.mridata):
+                sheet = "1"
+                inputdir = uploader.args.mridata
+                mrifields = os.path.join("resources", uploader.args.fields)
+                print("Input:", inputdir)
+                if access(inputdir, R_OK):
+                    seriespattern = '*.csv'
+                    try:
+                        files = glob.glob(join(inputdir, seriespattern))
+                        print("Files:", len(files))
+                        project = uploader.xnat.get_project(projectcode)
+                        for f2 in files:
+                            print("Loading", f2)
+                            dp = MridataParser(mrifields,f2, sheet)
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
+                                                                     f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
                                 print(msg)
                                 logging.info(msg)
 

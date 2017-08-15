@@ -57,6 +57,14 @@ class DataParser(object):
         dt = datetime.fromordinal(dateoffset + int(orig))
         return dt.strftime("%Y-%m-%d")
 
+    def formatCondensedDate(self,orig):
+        """
+        Reformats date number from Excel to yyyymmdd
+        """
+        dateoffset = 693594
+        dt = datetime.fromordinal(dateoffset + int(orig))
+        return dt.strftime("%Y%m%d")
+
 ########################################################################
 
 if __name__ == "__main__":

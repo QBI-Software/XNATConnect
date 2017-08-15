@@ -143,7 +143,11 @@ class XnatConnector:
             mandata['ID']= exptid
 
             if xsdtype + '/date' in exptdata:
-                expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'],"%Y.%m.%d %H:%M:%S")
+                vdate = exptdata[xsdtype + '/date']
+                if "-" in vdate:
+                    expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'], "%Y-%m-%d")
+                else:
+                    expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'],"%Y.%m.%d %H:%M:%S")
                 del exptdata[xsdtype + '/date']
             else:
                 expt_creation = datetime.datetime.now()
