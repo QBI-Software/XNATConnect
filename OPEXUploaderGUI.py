@@ -36,7 +36,8 @@ class OPEXUploaderGUI(wx.Frame):
                            'CANTAB': '--cantab' ,
                            'AMUNET': '--amunet',
                            'ACE-R': '--acer',
-                           'MRIscans': '--mri'}
+                           'MRIscans': '--mri',
+                           'ASHS and Freesurfer': '--mridata'}
         self.runoptionslabel = wx.StaticText(self.panel, label="Select option : ", pos=(pos_x[0], pos_y))
         self.runoptions = wx.ComboBox(self.panel, pos=(pos_x[1], pos_y), size=(150, -1), choices=self.optionlist.keys(), style=wx.CB_DROPDOWN)
         pos_y += line_height

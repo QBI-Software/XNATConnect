@@ -29,34 +29,44 @@ if __name__ == "__main__":
             - run XnatUploadScans with "--u sortedscans"
 
              ''')
-    parser.add_argument('filedir', action='store', help='Top level file directory eg SUBJECTID')
+    parser.add_argument('inputdir', action='store', help='Top level file directory eg SUBJECTID')
+    parser.add_argument('--scandir', action='store', help='Copy scans to this directory for upload to XNAT')
 
     args = parser.parse_args()
     series ={}
     pattern = '^([0-9A-Z_\.]+)(\d{4})\..*'
     p = re.compile(pattern)
-    scandir = args.filedir
-    dirpath = path.dirname(scandir)
-    datapath = join(dirpath, 'sortedscans')
-    if not path.isdir(datapath):
-        try:
-            mkdir(datapath)
-            mkdir(join(datapath, path.basename(scandir)))
-            mkdir(join(datapath, path.basename(scandir), 'scans'))
-            datapath = join(datapath, path.basename(scandir), 'scans')
-        except:
-            raise OSError
+    #Read files from input directory
+    inputdir = args.inputdir
+    if not access(inputdir, R_OK):
+        raise OSError("Cannot access input directory")
+
+    #Create output directory if not already existing
+    if args.scandir is not None:
+        datapath = args.scandir
     else:
-        datapath = join(datapath,path.basename(scandir), 'scans')
+        dirpath = path.dirname(inputdir)
+        datapath = join(dirpath, 'sortedscans')
+    origdatapath = datapath
 
-    if access(scandir, R_OK):
-
-        for subdr in listdir(scandir):
-            if subdr == 'scans':
+    #Create MRI sessions for each subject directory
+    for subject in listdir(inputdir):
+        print "Subject: ", subject
+        try:
+            mkdir(join(datapath, subject))
+            mkdir(join(datapath,subject,'scans'))
+            datapath = join(datapath,subject,'scans')
+        except OSError:
+            print 'Directory exists: ', join(datapath, subject)
+            datapath = origdatapath
+            continue
+        for group in listdir(join(inputdir,subject)):
+            grouppath = join(inputdir,subject,group)
+            if not isdir(grouppath) or group == 'scans':
                 continue
             # get list of series
-            for filename in listdir(join(scandir,subdr)):
-                dcm = dicom.read_file(join(scandir,subdr,filename))
+            for filename in listdir(grouppath):
+                dcm = dicom.read_file(join(grouppath,filename))
                 if not dcm:
                     print "Not DICOM - skipping: ", filename
                     continue
@@ -67,11 +77,12 @@ if __name__ == "__main__":
                     series_prefix = '.'.join(parts[0:idx + 1])
                     series[series_num] = [join(datapath,str(int(series_num))), series_prefix]
             # Move files to new dirs grouped by series
+
             for snum, dpath in series.items():
                 seriespattern = dpath[1] + '.*'
                 try:
                     mkdir(dpath[0])
-                    files = glob.glob(join(scandir,subdr, seriespattern))
+                    files = glob.glob(join(grouppath, seriespattern))
                     for f2 in files:
                         shutil.copy(f2, dpath[0])
                 except:
@@ -79,9 +90,10 @@ if __name__ == "__main__":
                     raise OSError
 
             series={}
+
         print "Files sorted to dir: ", datapath
-    else:
-        print "Cannot access directory: ", scandir
+        datapath = origdatapath
+
 
 
 

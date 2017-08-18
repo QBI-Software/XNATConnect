@@ -174,18 +174,13 @@ class XnatConnector:
             label = prefix + "_" + str(c)
         return label
 
-    def changeExptLabel(self,oldlabel, newlabel):
-        qry = '/projects/*/subjects/*/experiments'
-        expts = self.conn.select(qry)
-        elist = [e for e in expts if e.label() == oldlabel]
-
-        if len(elist) == 1:
-            expt = elist[0]
+    def changeExptLabel(self,projectcode, oldlabel, newlabel):
+        project = self.get_project(projectcode)
+        expt = project.experiment(oldlabel)
+        if expt.exists():
             print "Old:", expt.label()
             expt.attrs.set('label', newlabel)
             print "New:", expt.label()
-        elif len(elist) > 1:
-            print "More than one expt found with label=", oldlabel
         else:
             print("No expts found with label=", oldlabel)
 
@@ -417,7 +412,7 @@ if __name__ == "__main__":
                 print "Project: ", p.id()
 
         if (args.c1 is not None and args.c2 is not None):
-            xnat.changeExptLabel(args.c1, args.c2)
+            xnat.changeExptLabel(projectcode, args.c1, args.c2)
 
         if (args.m is not None and args.m):
             for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
