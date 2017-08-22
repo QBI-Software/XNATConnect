@@ -16,6 +16,7 @@ import re
 import glob
 import shutil
 import dicom
+from dicom.filereader import InvalidDicomError, read_file
 
 
 if __name__ == "__main__":
@@ -34,8 +35,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     series ={}
-    pattern = '^([0-9A-Z_\.]+)(\d{4})\..*'
-    p = re.compile(pattern)
+    #pattern = '^([0-9A-Z_\.]+)(\d{4})\..*'
+    #p = re.compile(pattern)
     #Read files from input directory
     inputdir = args.inputdir
     if not access(inputdir, R_OK):
@@ -48,10 +49,15 @@ if __name__ == "__main__":
         dirpath = path.dirname(inputdir)
         datapath = join(dirpath, 'sortedscans')
     origdatapath = datapath
+    #Check only subject dirs processed
+    pattern = re.compile('^\d{4}[A-Za-z0-9]+$')
 
     #Create MRI sessions for each subject directory
     for subject in listdir(inputdir):
         print "Subject: ", subject
+        if not pattern.match(subject):
+            print "Not a subject - next"
+            continue
         try:
             mkdir(join(datapath, subject))
             mkdir(join(datapath,subject,'scans'))
@@ -66,8 +72,9 @@ if __name__ == "__main__":
                 continue
             # get list of series
             for filename in listdir(grouppath):
-                dcm = dicom.read_file(join(grouppath,filename))
-                if not dcm:
+                try:
+                    dcm = dicom.read_file(join(grouppath,filename))
+                except InvalidDicomError:
                     print "Not DICOM - skipping: ", filename
                     continue
                 series_num = str(dcm.SeriesNumber)
