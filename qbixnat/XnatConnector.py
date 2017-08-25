@@ -77,7 +77,7 @@ class XnatConnector:
         qry_project = '/projects'
         return self.conn.select(qry_project)
 
-    def list_subjects_all(self, projectcode):
+    def list_subjects_all(self, projectcode, fieldnames=None):
         """
         Lists all subjects in a project to console
         """
@@ -85,12 +85,20 @@ class XnatConnector:
         subj = self.get_subjects(projectcode)
         outfilename = projectcode + 'subjectlist.csv'
         with open(outfilename, 'wb') as csvfile:
-            fieldnames = ['ID', 'subject_ID']
+            if fieldnames is None:
+                fieldnames = ['ID','group','label','dob','gender','handedness','education']
             mywriter = csv.DictWriter(csvfile, fieldnames=fieldnames)
             mywriter.writeheader()
             for s in subj:
-                print("ID=", s.label(), ",SubjectID=", s.id())  # xnat subject id eg XNAT_S00006
-                mywriter.writerow({'ID': s.label(), 'subject_ID': s.id()})
+                print "ID=", s.label(), ", SubjectID=", s.id() # xnat subject id eg XNAT_S00006
+                #ID	group	label	dob	gender	handedness	education
+                mywriter.writerow({'ID': s.label(),
+                                   'group': s.attrs.get('group'),
+                                   'dob': s.attrs.get('dob'),
+                                   'gender': s.attrs.get('gender'),
+                                   'handedness': s.attrs.get('handedness'),
+                                   'education': s.attrs.get('education')
+                                   })
         return outfilename
 
     def get_subjectid_bylabel(self, projectcode, label):
@@ -193,15 +201,22 @@ class XnatConnector:
         data should be organized by DICOM series as: data/subject_label/scans/series_number/*.dcm (or *.IMA)
         :return: number of sessions loaded
         """
+        import re
         project = self.get_project(projectcode)
-        owners = project.owners()
-        proj_pi = self.get_projectPI(projectcode)
+        #owners = project.owners()
+        #proj_pi = self.get_projectPI(projectcode)
         ctr = 0
         default_scantype = 'MR Image Storage'
         #load
         scanfiles = [f for f in listdir(scandir) if os.path.isdir(join(scandir, f))]
         if scanfiles:
             dirpath = os.path.dirname(scandir)
+            visitid = scandir.rsplit('_', 1)
+            if len(visitid) > 1:
+                m = re.match('(\d){1,2}[mM]?$', visitid[1])
+                visitid = int(m.group(1))
+            else:
+                visitid = 1
             donepath = join(dirpath, 'done')
             if not os.path.isdir(donepath):
                 try:
@@ -219,13 +234,14 @@ class XnatConnector:
             if s.exists():
                 ctr = ctr + 1
                 # Set experiment
-                elabel = 'MR_%s_%d' % (s.label(), ctr)
+                elabel = 'MR_%s_%d' % (s.label(), visitid)
                 elabel = self.checkUniqueLabel(s, elabel)  # eid = self.find_next_experimentID(projectcode, prefix,True)
                 message = "Uploading scans for %s: %s with expt=%s" % (s.id(), s.label(), elabel)
                 logging.info(message)
                 print(message)
                 expt = s.experiment(elabel)
                 expt.create()  # experiments='xnat:mrSessionData')
+                expt.attrs.set('xnat:mrSessionData/visit_id', visitid) #could change to 0m?
                 uploaddir = join(scandir, slabel, 'scans')
                 scan_ctr = 0
                 # (scan_date, scan_time) = (None, None)
@@ -416,7 +432,7 @@ if __name__ == "__main__":
 
         if (args.m is not None and args.m):
             for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
-                xnat.delete_experiments(projectcode,dtype,{'status': 'ABORTED'})
+                xnat.delete_experiments(projectcode,dtype,{'status': 'COMPLETED'}) # 'status': 'SYSTEM_ERROR'
 
         xnat.conn.disconnect()
         print("FINISHED")
