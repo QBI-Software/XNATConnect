@@ -69,8 +69,8 @@ if __name__ == '__main__':
 
     home = expanduser("~")
     configfile = join(home, '.xnat.cfg')
-    database = 'xnat-dev'
-    projectcode = 'TEST_PJ00'
+    database = 'opex'
+    projectcode = 'P1'
     xnat = XnatConnector(configfile, database)
     print "Connecting to URL=", xnat.url
     xnat.connect()
