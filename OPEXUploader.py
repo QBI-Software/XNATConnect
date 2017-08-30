@@ -89,7 +89,7 @@ class OPEXUploader():
         motxsd = amparser.getxsd()
         expt = subject.experiment(motid)
 
-        if not expt.exists():
+        if not expt.exists() or (self.args.update is not None and self.args.update):
             #two files with different columns merged to one
             if 'AEV_Average total error' in row:
                 (mandata,motdata) = amparser.mapAEVdata(row,i)
@@ -351,7 +351,7 @@ if __name__ == "__main__":
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             if ("RowBySession" in f2):
-                                print("Loading", f2)
+                                print "Loading: ", f2
                                 dp = CantabParser(cantabfields,f2, sheet)
                                 (missing,matches) = uploader.uploadData(project,dp)
                                 # Output matches and missing

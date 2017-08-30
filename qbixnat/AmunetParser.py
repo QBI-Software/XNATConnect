@@ -46,8 +46,8 @@ class AmunetParser(DataParser):
 
     def mapMandata(self, xsd, row, i):
         #Get Visit if present (manual)
-        if ('Visit' in row):
-            interval = row['Visit']
+        if ('Visit' in row and row.Visit is not None):
+            interval = int(row['Visit'])
         elif row['S_Visit'] is not None:  #No overwrite
             visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
             interval = int(visit.group(1))
@@ -74,11 +74,13 @@ class AmunetParser(DataParser):
         # Get Date if present (manual)
         visitdate = None
         if ('Date' in row):
-            visitdate = self.formatDobNumber(row['Date'])
-
-            # visitdate = visitdate.replace("-",".")
-            # visitdate = visitdate + " 00:00:00"
-        print "Visit date=", visitdate
+            try:
+                visitdate = int(row['Date'])
+                visitdate = self.formatDobNumber(visitdate)
+            except:
+                visitdate = row['Date'].replace("-",".")
+                visitdate = visitdate + " 00:00:00"
+        #print "Visit date=", visitdate
         return visitdate
 
     def mapAEVdata(self, row,i):
@@ -154,8 +156,11 @@ class AmunetParser(DataParser):
         """
         #visit = re.search('Visit\s(\d{1,2})', str(row['S_Visit']))
         if ('Date' in row):
-            uid = int(row['Date'])
-            uid = self.formatCondensedDate(uid)
+            try:
+                uid = int(row['Date'])
+                uid = self.formatCondensedDate(uid)
+            except:
+                uid = row['Date'].replace('-','')
         else:
             uid = sum([i for i in row if type(i) == float]) #create hash of values from row values
             uid = int(uid)

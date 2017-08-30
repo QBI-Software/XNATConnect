@@ -150,13 +150,13 @@ class XnatConnector:
             mandata['experiments'] = xsdtype
             mandata['ID']= exptid
 
-            if xsdtype + '/date' in exptdata:
-                vdate = exptdata[xsdtype + '/date']
+            if xsdtype + '/date' in mandata:
+                vdate = mandata[xsdtype + '/date']
                 if "-" in vdate:
-                    expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'], "%Y-%m-%d")
+                    expt_creation = datetime.datetime.strptime(mandata[xsdtype + '/date'], "%Y-%m-%d")
                 else:
-                    expt_creation = datetime.datetime.strptime(exptdata[xsdtype + '/date'],"%Y.%m.%d %H:%M:%S")
-                del exptdata[xsdtype + '/date']
+                    expt_creation = datetime.datetime.strptime(mandata[xsdtype + '/date'],"%Y.%m.%d %H:%M:%S")
+                del mandata[xsdtype + '/date']
             else:
                 expt_creation = datetime.datetime.now()
             expt_creation_date = expt_creation.strftime("%Y%m%d")
@@ -241,7 +241,7 @@ class XnatConnector:
                 print(message)
                 expt = s.experiment(elabel)
                 expt.create()  # experiments='xnat:mrSessionData')
-                expt.attrs.set('xnat:mrSessionData/visit_id', visitid) #could change to 0m?
+                expt.attrs.set('xnat:mrSessionData/visit_id', str(visitid)) #could change to 0m?
                 uploaddir = join(scandir, slabel, 'scans')
                 scan_ctr = 0
                 # (scan_date, scan_time) = (None, None)

@@ -65,6 +65,14 @@ class DataParser(object):
         dt = datetime.fromordinal(dateoffset + int(orig))
         return dt.strftime("%Y%m%d")
 
+def convertExcelDate(orig):
+    """
+    Reformats date number from Excel to datetime
+    """
+    #from datetime import datetime
+    dateoffset = 693594
+    dt = datetime.fromordinal(dateoffset + int(orig))
+    return dt
 ########################################################################
 
 if __name__ == "__main__":
