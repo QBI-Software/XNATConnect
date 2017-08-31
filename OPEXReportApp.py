@@ -1,6 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import plotly.graph_objs as go
 import pandas as pd
 from os.path import expanduser, join
 from qbixnat.XnatConnector import XnatConnector  # Only for testing
@@ -21,7 +22,7 @@ class OPEXReportApp(object):
         }
         return colors
 
-    def participants_layout(self, df):
+    def participants_layout(self, df, df_expts):
         colors = self.colors()
         title = 'OPEX XNAT participants [Total=' + str(sum(df['All'])) + ']'
         self.app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
@@ -57,6 +58,29 @@ class OPEXReportApp(object):
                     }
                 }
             }
+        ),
+        # Expts stacked bar
+        dcc.Graph(
+           id='expts',
+           figure=go.Figure(
+               data=[
+                   go.Bar(
+                       customdata=df_expts['Subject'],
+                       y=df_expts[i],
+                       name=i,
+                   ) for i in df_expts.columns[2:]
+
+               ],
+               layout=go.Layout(
+                       xaxis={'type': 'linear', 'title': 'Participants'},
+                       yaxis={'title': 'Expts Count'},
+                       margin={'l': 40, 'b': 40, 't': 10, 'r': 10},
+                       legend={'x': 0, 'y': 1},
+                       hovermode='closest'
+                   )
+
+           ),
+
         )
     ])
 
@@ -81,14 +105,12 @@ if __name__ == '__main__':
             report = OPEXReport(subjects)
             op = OPEXReportApp()
             df = report.getParticipants()
-            print('Data loaded:', df)
-            op.app.layout = op.participants_layout(df) #reactive loading
-            # proj = xnat.get_project(projectcode)
-            # xsd = "MOT"
-            # expts = proj.experiments(xsd + "*")  # prefix of labels/ids
-            # teste = expts.fetchone()
-            # if (teste is not None):
-            #     print(teste.label())
+            print('Participants loaded:', df)
+            report_expts = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
+            df_expts = report_expts.getExptCollection()
+            print df_expts.head()
+            # reactive loading to app
+            op.app.layout = op.participants_layout(df, df_expts)
             op.app.run_server(debug=True, port=8089)
         else:
             print "No subjects found - Check PROJECT CODE is correct"

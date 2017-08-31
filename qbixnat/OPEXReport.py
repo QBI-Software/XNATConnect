@@ -70,10 +70,11 @@ class OPEXReport(object):
 
     def getExptCollection(self):
         """
-        Generate Frequency histogram for expts collected per group
+        Generate Frequency histogram for expts collected
         :param csvfile:
-        :return:
+        :return: sorted counts of each expt per participant
         """
+        df = None
         if self.data is not None:
             #Area chart or Stacked Bar Chart or Histogram
             groups = self.data
@@ -82,18 +83,24 @@ class OPEXReport(object):
             #exclude withdrawn
             df = groups[groups.Group != 'withdrawn']
             #sort by largest number expts (cantabDMS) - ascending
-            df.sort_values('CANTAB DMS')
+            df = df.sort_values('CANTAB DMS')
             #plot - exclude Subject, m/f,hand,yob
-            cols = ['Group','Subject','Virtual Water Maze','Godin','PSQI','DASS','MR Sessions',	'Health screening',	'MRI ASHS',	'MRI FreeSurfer',
-                    'ACER',	'CANTAB DMS',	'CANTAB ERT',	'CANTAB MOT',	'CANTAB PAL',	'CANTAB SWM',	'IPAQ',	'Insomnia']
+            cols = ['Group','Subject','Health screening','ACER',
+                    'CANTAB DMS',	'CANTAB ERT',	'CANTAB MOT',	'CANTAB PAL',	'CANTAB SWM',
+                    'MR Sessions','MRI ASHS',	'MRI FreeSurfer',
+                    'Virtual Water Maze','PSQI','DASS','IPAQ',	'Insomnia','Godin']
             df = df[cols]
+            #test plot
+            df.plot.area(x='Subject', y=cols[2:])
+
+        return df
 
             #Group
-            df = groups.groupby(by='Group')
-            df.plot(type='bar')
-            df_AIT = df.get_group('AIT')
-            df_MIT = df.get_group('MIT')
-            df_LIT = df.get_group('LIT')
+            # df_grouped = groups.groupby(by='Group')
+            # df_grouped.plot.bar(x='Group',y=cols[2:])
+            # df_AIT = df_grouped.get_group('AIT')
+            # df_MIT = df_grouped.get_group('MIT')
+            # df_LIT = df_grouped.get_group('LIT')
 
 
     def getMultivariate(self, expts):
