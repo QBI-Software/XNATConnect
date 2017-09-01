@@ -65,7 +65,7 @@ class OPEXReportApp(object):
            figure=go.Figure(
                data=[
                    go.Bar(
-                       customdata=df_expts['Subject'],
+                       text=df_expts['Subject'],
                        y=df_expts[i],
                        name=i,
                    ) for i in df_expts.columns[2:]
@@ -102,13 +102,15 @@ if __name__ == '__main__':
         print "...Connected"
         subjects = xnat.get_subjects(projectcode)
         if (subjects.fetchone() is not None):
-            report = OPEXReport(subjects)
+            #report = OPEXReport(subjects)
+            report = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
             op = OPEXReportApp()
             df = report.getParticipants()
             print('Participants loaded:', df)
-            report_expts = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
-            df_expts = report_expts.getExptCollection()
+            #report_expts = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
+            df_expts = report.getExptCollection()
             print df_expts.head()
+            #report.printMissingExpts()
             # reactive loading to app
             op.app.layout = op.participants_layout(df, df_expts)
             op.app.run_server(debug=True, port=8089)

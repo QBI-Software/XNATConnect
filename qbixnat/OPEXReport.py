@@ -17,7 +17,7 @@ from os.path import join
 import numpy as np
 import pandas
 import argparse
-
+from collections import OrderedDict
 from qbixnat.CantabParser import CantabParser
 
 
@@ -31,8 +31,12 @@ class OPEXReport(object):
         self.subjects = None
         self.subjectids = None
         self.data = None
+        self.minmth = 0
+        self.maxmth = 12
+        self.exptintervals = self.__experiments()
         if subjects is not None:
             self.subjects = subjects
+            self.subjectids = [s.label() for s in subjects]
             print "Subjects loaded from database"
         elif csvfile is not None:
             self.data = pandas.read_csv(csvfile)
@@ -40,6 +44,26 @@ class OPEXReport(object):
                 self.subjectids = self.data.Subject.unique()
                 print "Subject IDs loaded from file"
 
+    def __experiments(self):
+        """Create list of experiments in set order"""
+        fields= [('Health screening', 3),
+             ('ACER', 3),
+             ('CANTAB DMS', 1),
+             ('CANTAB ERT', 1),
+             ('CANTAB MOT', 1),
+             ('CANTAB PAL', 1),
+             ('CANTAB SWM', 1),
+             ('MR Sessions', 6),
+             ('MRI ASHS', 6),
+             ('MRI FreeSurfer', 6),
+             ('Virtual Water Maze', 3),
+             ('PSQI', 3),
+             ('DASS', 3),
+             ('IPAQ', 3),
+             ('Insomnia', 3),
+             ('Godin', 3)]
+        od = OrderedDict(fields)
+        return od
 
 
     def getParticipants(self):
@@ -85,15 +109,49 @@ class OPEXReport(object):
             #sort by largest number expts (cantabDMS) - ascending
             df = df.sort_values('CANTAB DMS')
             #plot - exclude Subject, m/f,hand,yob
-            cols = ['Group','Subject','Health screening','ACER',
-                    'CANTAB DMS',	'CANTAB ERT',	'CANTAB MOT',	'CANTAB PAL',	'CANTAB SWM',
-                    'MR Sessions','MRI ASHS',	'MRI FreeSurfer',
-                    'Virtual Water Maze','PSQI','DASS','IPAQ',	'Insomnia','Godin']
+            cols = ['Group','Subject']
+            cols = cols.append(self.exptintervals.keys())
+
             df = df[cols]
             #test plot
-            df.plot.area(x='Subject', y=cols[2:])
+            #df.plot.area(x='Subject', y=cols[2:])
 
         return df
+
+    def printMissingExpts(self):
+
+        if self.data is not None:
+            # find all experiments
+            #sexpts = self.exptintervals
+            headers = ['Subject'] + self.exptintervals.keys()
+            fdata = self.data[headers]
+            report = fdata.copy()
+            report["Progress"]=""
+            for s in sorted(self.subjectids):
+                print "Subject:", s
+                result = [s]
+                sdata = fdata.query("Subject == '" + s + "'") #find data for this subject
+                x = sdata.index.tolist()[0]
+                smonth = int(list(sdata['CANTAB DMS'])[0]) #determine how far through the trial
+                sprogress = (100 * smonth/self.maxmth)
+                print "Progress:", smonth, "month", sprogress, "%"
+                #for each expt - list number collected
+                for e in self.exptintervals.keys():
+                    v = False
+                    sd = list(sdata[e])[0]
+                    if (sd is None or np.isnan(sd)):
+                        print e, "None"
+                    elif(sd == len(range(self.minmth,smonth,self.exptintervals[e]))):
+                        print e, "Complete"
+                        v = True
+                    else:
+                        print e, "Partial"
+
+                    result.append(v)
+                result.append(sprogress)
+                report.iloc[x] = result
+
+            print report
 
             #Group
             # df_grouped = groups.groupby(by='Group')
@@ -140,8 +198,10 @@ if __name__ == "__main__":
             # df = op.getParticipants()
             # print df
             #Get Frequency histogram of expts collected
-            print "\n****Frequency histogram of expts****"
-            df = op.getExptCollection()
+            #print "\n****Frequency histogram of expts****"
+            #df = op.getExptCollection()
+            print "\n****Missing data report****"
+            df = op.printMissingExpts()
 
         except IOError as e:
             print "IOError: cannot access file: ", e.message
