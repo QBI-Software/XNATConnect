@@ -22,10 +22,39 @@ class OPEXReportApp(object):
         }
         return colors
 
-    def participants_layout(self, df, df_expts):
+    def tablecell(self,val):
+        if type(val) == bool:
+            if val == True:
+                return html.Td([html.Span(className="glyphicon glyphicon-ok")],
+                                className="alert-success")
+            else:
+                return html.Td([html.Span(className="glyphicon glyphicon-remove")],
+                               className="alert-danger")
+        else:
+            return val
+
+    def generate_table(self,dataframe, max_rows=10):
+        colors = self.colors()
+        return html.Table(
+            # Header
+            [html.Tr([html.Th(col) for col in dataframe.columns])] +
+
+            # Body
+            [html.Tr([
+                self.tablecell(dataframe.iloc[i][col]) for col in dataframe.columns
+            ]) for i in range(min(len(dataframe), max_rows))]
+            ,
+            className='table',
+            style={
+                    'textAlign': 'center',
+                    'color': colors['text']
+                })
+
+    def participants_layout(self, df, df_expts, df_report):
         colors = self.colors()
         title = 'OPEX XNAT participants [Total=' + str(sum(df['All'])) + ']'
-        self.app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
+        #self.app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
+        self.app.css.append_css({"external_url": "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"})
         return html.Div(className='container',
                                    style={'backgroundColor': colors['background']},
                                    children=[
@@ -81,7 +110,16 @@ class OPEXReportApp(object):
 
            ),
 
-        )
+        ),
+        html.Div(id='missing',
+                 children=[
+           html.H3(children='Missing Data report',
+                   style={
+                       'textAlign': 'center',
+                       'color': colors['text']
+                   }),
+            self.generate_table(df_report, max_rows=100)
+            ])
     ])
 
 
@@ -103,16 +141,18 @@ if __name__ == '__main__':
         subjects = xnat.get_subjects(projectcode)
         if (subjects.fetchone() is not None):
             #report = OPEXReport(subjects)
-            report = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
+            #report = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
+            report = OPEXReport(csvfile="sampledata\\opex_counts.csv")
             op = OPEXReportApp()
             df = report.getParticipants()
             print('Participants loaded:', df)
             #report_expts = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
             df_expts = report.getExptCollection()
             print df_expts.head()
-            #report.printMissingExpts()
+            df_report = report.printMissingExpts()
+            df_report.sort_values(by='Progress', inplace=True, ascending=False)
             # reactive loading to app
-            op.app.layout = op.participants_layout(df, df_expts)
+            op.app.layout = op.participants_layout(df, df_expts, df_report)
             op.app.run_server(debug=True, port=8089)
         else:
             print "No subjects found - Check PROJECT CODE is correct"
