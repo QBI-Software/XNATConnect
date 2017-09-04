@@ -14,8 +14,11 @@ import warnings
 from os import listdir
 from os.path import expanduser
 from os.path import join
-
+import multiprocessing
+#import resource
+from itertools import repeat
 import datetime
+import time
 import dicom
 import pyxnat
 from configobj import ConfigObj
@@ -83,7 +86,7 @@ class XnatConnector:
         """
 
         subj = self.get_subjects(projectcode)
-        outfilename = projectcode + 'subjectlist.csv'
+        outfilename = projectcode + '_subjectlist.csv'
         with open(outfilename, 'wb') as csvfile:
             if fieldnames is None:
                 fieldnames = ['ID','group','label','dob','gender','handedness','education']
@@ -99,6 +102,7 @@ class XnatConnector:
                                    'handedness': s.attrs.get('handedness'),
                                    'education': s.attrs.get('education')
                                    })
+        print "Subjects written to file:", outfilename
         return outfilename
 
     def get_subjectid_bylabel(self, projectcode, label):
@@ -191,6 +195,37 @@ class XnatConnector:
             print "New:", expt.label()
         else:
             print("No expts found with label=", oldlabel)
+
+    def getExptCounts(self,subject):
+        """
+        Create counts table per subject, including current stage
+        :param subject:
+        :return:
+        """
+        scounts = {}
+
+
+        if subject is not None:
+            expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
+            #expts = subject.experiments() #returns list of expt obj cf experiments() alone returns collection and subsequent calls each expt
+            #print "Subject has expts: ", len(expts)
+            expt_types =[]
+            expt_dates=[]
+            for e in expts:
+                expt_types.append(e[0])
+                if e[1] is not None and len(e[1]) > 0:
+                    expt_dates.append(datetime.datetime.strptime(e[1], '%Y-%m-%d') )
+            if (len(expt_dates) > 0):
+                scounts['firstvisit'] = min(expt_dates)
+            else:
+                scounts['firstvisit'] = None
+            for expt in expt_types:
+                if expt in scounts.keys():
+                    scounts[expt] = scounts[expt] + 1
+                else:
+                    scounts[expt] = 1
+        print "Subject counts:", subject.id(), scounts
+        return scounts
 
     def upload_MRIscans(self, projectcode, scandir):
         """
@@ -404,6 +439,7 @@ if __name__ == "__main__":
     parser.add_argument('--m', action='store_true', help='delete experiments (opex,aborted)')
     parser.add_argument('--c1', action='store', help='change expt label from')
     parser.add_argument('--c2', action='store', help='change expt label to')
+    parser.add_argument('--counts', action='store_true', help='Get experiment counts for subjects')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     #Tests
     #args = parser.parse_args(['xnat-dev', 'TEST_PJ00', '--p']) #Preset
@@ -414,28 +450,57 @@ if __name__ == "__main__":
     xnat.connect()
     if (xnat.conn):
         print "...Connected"
-        # EXAMPLE -
-        projectcode = args.projectcode  # "QBICC"
-        if (args.x is not None and args.x):
-            xnat.delete_subjects_all(projectcode)
+        try:
+            projectcode = args.projectcode  # "QBICC"
+            if (args.x is not None and args.x):
+                xnat.delete_subjects_all(projectcode)
 
-        if (args.s is not None and args.s):
-            xnat.list_subjects_all(projectcode)
+            if (args.s is not None and args.s):
+                xnat.list_subjects_all(projectcode)
 
-        if (args.p is not None and args.p):
-            projlist = xnat.list_projects()
-            for p in projlist:
-                print "Project: ", p.id()
+            if (args.p is not None and args.p):
+                projlist = xnat.list_projects()
+                for p in projlist:
+                    print "Project: ", p.id()
 
-        if (args.c1 is not None and args.c2 is not None):
-            xnat.changeExptLabel(projectcode, args.c1, args.c2)
+            if (args.c1 is not None and args.c2 is not None):
+                xnat.changeExptLabel(projectcode, args.c1, args.c2)
 
-        if (args.m is not None and args.m):
-            for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
-                xnat.delete_experiments(projectcode,dtype,{'status': 'COMPLETED'}) # 'status': 'SYSTEM_ERROR'
+            if (args.counts is not None and args.counts):
+                subjects = list(xnat.get_subjects(projectcode))
+                start=time.time()
+                subject = xnat.get_subjects(projectcode).fetchone()
+                counts = xnat.getExptCounts(subject)
+                print "COUNTS for one subject: ", counts, time.time() - start, 'secs'
 
-        xnat.conn.disconnect()
-        print("FINISHED")
+                print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
+                start = time.time()
+                total_tasks = len(subjects)
+                tasks = []
+                for i in range(total_tasks):
+                    p = multiprocessing.Process(target=xnat.getExptCounts, args=(subjects[i],))
+                    tasks.append(p)
+                    p.start()
+                result=[]
+                for proc in tasks:
+                    proc.join()
+                    result.append(proc.exitcode)
+
+               # pool = multiprocessing.Pool(processes=3)
+               # result = pool.map(xnat.getExptCounts, subjects)
+                #print(result.get(timeout=1))
+                print result
+                print "Finished:", time.time() - start, 'secs'
+
+            if (args.m is not None and args.m):
+                for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
+                    xnat.delete_experiments(projectcode,dtype,{'status': 'COMPLETED'}) # 'status': 'SYSTEM_ERROR'
+        except ValueError as e:
+            print "Error:", e
+
+        finally:
+            xnat.conn.disconnect()
+            print("FINISHED")
 
     else:
         print "Failed to connect"

@@ -17,6 +17,7 @@ from os.path import join
 import numpy as np
 import pandas
 import argparse
+import multiprocessing
 from collections import OrderedDict
 from qbixnat.CantabParser import CantabParser
 
@@ -27,6 +28,7 @@ class OPEXReport(object):
         """
         List of subjects from XNAT as collection
         :param subjects:
+        :param csvfile: spreadsheet export from OPEX subjects tab (with counts)
         """
         self.subjects = None
         self.subjectids = None
@@ -34,6 +36,7 @@ class OPEXReport(object):
         self.minmth = 0
         self.maxmth = 12
         self.exptintervals = self.__experiments()
+        self.counts = None
         if subjects is not None:
             self.subjects = subjects
             self.subjectids = [s.label() for s in subjects]
@@ -62,6 +65,27 @@ class OPEXReport(object):
              ('IPAQ', 3),
              ('Insomnia', 3),
              ('Godin', 3)]
+        od = OrderedDict(fields)
+        return od
+
+    def _expt_types(self):
+        """Create list of experiments in set order"""
+        fields= [('Health screening','opex:health'),
+             ('ACER','opex:acer'),
+             ('CANTAB DMS','opex:cantabDMS'),
+             ('CANTAB ERT','opex:cantabERT'),
+             ('CANTAB MOT','opex:cantabMOT'),
+             ('CANTAB PAL','opex:cantabPAL'),
+             ('CANTAB SWM','opex:cantabSWM'),
+             ('MR Sessions','xnat:mrSessionData'),
+             ('MRI ASHS','opex:mriashs'),
+             ('MRI FreeSurfer','opex:mrifs'),
+             ('Virtual Water Maze','opex:amunet'),
+             ('PSQI','opex:psqi'),
+             ('DASS','opex:dass'),
+             ('IPAQ','opex:ipaq'),
+             ('Insomnia','opex:insomnia'),
+             ('Godin','opex:godin')]
         od = OrderedDict(fields)
         return od
 
@@ -118,13 +142,72 @@ class OPEXReport(object):
 
         return df
 
-    def printMissingExpts(self):
+    def work(self,number):
+        """
+            Multiprocessing work
 
-        if self.data is not None:
+            Parameters
+            ----------
+            number : integer
+                unit of work number
+            """
+        print "Unit of work number %d" % number  # simply print the worker's number
+
+    def getCounts(self, xnat):
+        """
+        Experiment counts for all subjects - from database
+        :param xnat: connection to database
+        :return: dataframe as counts
+        """
+        headers = ['Subject'] + self.exptintervals.keys() + ['Stage']
+        etypes = self._expt_types()
+        if self.counts is None:
+            self.counts = pandas.DataFrame([], columns=headers)
+        if self.subjects is not None:
+            for subj in subjects:
+                print "Subject:", subj.label()
+                result = [subj.label()]
+                counts = xnat.getExptCounts(subj)
+                for expt in self.exptintervals.keys():
+                    etype = etypes[expt]
+                    if (etype in counts):
+                        result.append(counts[etype])
+                    else:
+                        result.append(0)
+
+                result.append(self.getStage(counts['firstvisit']))
+                self.counts.append(result)
+                print result
+        print self.counts
+
+    def getStage(self,vdate):
+        """
+        Calculate stage in trial from first visit date
+        :param vdate: datetime.datetime object
+        :return: interval as 0,1,2 ...
+        """
+        months=0
+        if vdate is not None:
+            tdate = datetime.today()
+            dt = tdate - vdate
+            if dt.days > 0:
+                months = int(dt.days // 30)
+        return months
+
+    def printMissingExpts(self):
+        """
+        Print expt counts with true/false if complete data set for current stage
+        :param self:
+        :return:
+        """
+        if self.data is not None or self.counts is not None:
             # find all experiments
             #sexpts = self.exptintervals
             headers = ['Subject'] + self.exptintervals.keys()
-            fdata = self.data[headers]
+            if self.data is not None:
+                fdata = self.data[headers]
+            elif self.counts is not None:
+                fdata = self.counts
             report = fdata.copy()
             report["Progress"]=""
             for s in sorted(self.subjectids):
@@ -132,7 +215,10 @@ class OPEXReport(object):
                 result = [s]
                 sdata = fdata.query("Subject == '" + s + "'") #find data for this subject
                 x = sdata.index.tolist()[0]
-                smonth = int(list(sdata['CANTAB DMS'])[0]) #determine how far through the trial
+                if self.data is not None:
+                    smonth = int(list(sdata['CANTAB DMS'])[0]) #determine how far through the trial
+                elif self.counts is not None and sdata['Stage'] is not None:
+                    smonth = sdata['Stage'][0]
                 sprogress = (100 * smonth/self.maxmth)
                 print "Progress:", smonth, "month", sprogress, "%"
                 #for each expt - list number collected
@@ -179,6 +265,22 @@ class OPEXReport(object):
         return dt.strftime("%Y-%m-%d")
 
 ########################################################################
+def work(number):
+    """
+        Multiprocessing work
+
+        Parameters
+        ----------
+        number : integer
+            unit of work number
+        """
+    print "Unit of work number %d" % number  # simply print the worker's number
+
+def counts(tasks):
+    subject = tasks[0]
+    xnat = tasks[1]
+    counts = xnat.getExptCounts(subject)
+    print counts
 
 if __name__ == "__main__":
     from qbixnat.XnatConnector import XnatConnector #Only for testing
@@ -215,30 +317,33 @@ if __name__ == "__main__":
         xnat = XnatConnector(configfile, database)
         print "Connecting to URL=", xnat.url
         xnat.connect()
-        if (xnat.conn):
+        try:
             print "...Connected"
             proj = xnat.get_project(projectcode)
             subjects = xnat.get_subjects(projectcode)
-            msg = "Loaded %d subjects from %s" % (len(subjects.fetchall), proj.getID())
+            msg = "Loaded %d subjects from %s" % (len(subjects.fetchall()), proj.id())
             print msg
             op = OPEXReport(subjects=subjects)
             df = op.getParticipants()
             print df
 
 
-            # cantab = CantabParser("resources\\cantab_fields.csv", None)
-            # for xsd in cantab.getxsd():
-            #     expts = proj.experiments(xsd + "*")  # prefix of labels/ids
-            #     teste = expts.fetchone()
-            #     if (teste is not None):
-            #         df_baseline = cantab.getDFExpts(expts, '0',xsd)
-            #         print(df_baseline)
-            #     else:
-            #         print('No expts found for:', xsd)
-
-
+            print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
+            number_processes = 2
+            pool = multiprocessing.Pool(number_processes)
+            total_tasks = len(subjects.fetchall())
+            tasks = range(total_tasks)
+            print tasks
+            #results = pool.map_async(work, tasks)
+            results = pool.map_async(xnat.getExptCounts, (subjects,))
+            print results.get(timeout=1)
+            # # Get counts from database
+            # df_counts = op.getCounts(xnat)
+            # print df_counts
+            pool.close()
+            pool.join()
+        except ValueError as e:
+            print "Error: Failed to connect", e
+        finally:
             xnat.conn.disconnect()
             print("FINISHED")
-
-        else:
-            print "Failed to connect"
