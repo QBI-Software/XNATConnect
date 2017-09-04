@@ -133,8 +133,7 @@ class OPEXReport(object):
             #sort by largest number expts (cantabDMS) - ascending
             df = df.sort_values('CANTAB DMS')
             #plot - exclude Subject, m/f,hand,yob
-            cols = ['Group','Subject']
-            cols = cols.append(self.exptintervals.keys())
+            cols = ['Group', 'Subject'] + self.exptintervals.keys()
 
             df = df[cols]
             #test plot
@@ -208,12 +207,15 @@ class OPEXReport(object):
                 fdata = self.data[headers]
             elif self.counts is not None:
                 fdata = self.counts
+            fdata = self.data[self.data.Group != 'withdrawn']
             report = fdata.copy()
             report["Progress"]=""
             for s in sorted(self.subjectids):
                 print "Subject:", s
                 result = [s]
                 sdata = fdata.query("Subject == '" + s + "'") #find data for this subject
+                if sdata.empty:
+                    continue
                 x = sdata.index.tolist()[0]
                 if self.data is not None:
                     smonth = int(list(sdata['CANTAB DMS'])[0]) #determine how far through the trial
@@ -234,10 +236,11 @@ class OPEXReport(object):
                         print e, "Partial"
 
                     result.append(v)
-                result.append(sprogress)
+                result.append(smonth)
                 report.iloc[x] = result
 
             print report
+            return report
 
             #Group
             # df_grouped = groups.groupby(by='Group')
