@@ -18,6 +18,7 @@ import numpy as np
 import pandas
 import argparse
 import multiprocessing
+import time
 from collections import OrderedDict
 from qbixnat.CantabParser import CantabParser
 
@@ -134,50 +135,66 @@ class OPEXReport(object):
             df = df.sort_values('CANTAB DMS')
             #plot - exclude Subject, m/f,hand,yob
             cols = ['Group', 'Subject'] + self.exptintervals.keys()
-
             df = df[cols]
             #test plot
             #df.plot.area(x='Subject', y=cols[2:])
+        elif self.counts is not None:
+            df = self.counts
+            df = df.sort_values('CANTAB DMS')
 
         return df
 
-    def work(self,number):
+    def processCounts(self,subj,q):
         """
-            Multiprocessing work
-
-            Parameters
-            ----------
-            number : integer
-                unit of work number
-            """
-        print "Unit of work number %d" % number  # simply print the worker's number
-
-    def getCounts(self, xnat):
+        Process counts via multiprocessing
+        :param subj:
+        :return:
         """
-        Experiment counts for all subjects - from database
-        :param xnat: connection to database
-        :return: dataframe as counts
-        """
-        headers = ['Subject'] + self.exptintervals.keys() + ['Stage']
-        etypes = self._expt_types()
-        if self.counts is None:
-            self.counts = pandas.DataFrame([], columns=headers)
-        if self.subjects is not None:
-            for subj in subjects:
-                print "Subject:", subj.label()
-                result = [subj.label()]
-                counts = xnat.getExptCounts(subj)
-                for expt in self.exptintervals.keys():
-                    etype = etypes[expt]
-                    if (etype in counts):
-                        result.append(counts[etype])
-                    else:
-                        result.append(0)
+        result=[]
+        if subj is not None:
+            headers = ['Subject'] + self.exptintervals.keys() + ['Stage']
+            etypes = self._expt_types()
+            result = [subj.label()]
+            counts = self.xnat.getExptCounts(subj)
+            for expt in self.exptintervals.keys():
+                etype = etypes[expt]
+                if (etype in counts):
+                    result.append(counts[etype])
+                else:
+                    result.append(0)
 
-                result.append(self.getStage(counts['firstvisit']))
-                self.counts.append(result)
-                print result
-        print self.counts
+            result.append(self.getStage(counts['firstvisit']))
+            q[subj.label()]=result
+            #print result
+        #print "Counts:", len(self.counts)
+        return result
+
+    # def getCounts(self, xnat):
+    #     """
+    #     Experiment counts for all subjects - from database
+    #     :param xnat: connection to database
+    #     :return: dataframe as counts
+    #     """
+    #     headers = ['Subject'] + self.exptintervals.keys() + ['Stage']
+    #     etypes = self._expt_types()
+    #     if self.counts is None:
+    #         self.counts = pandas.DataFrame([], columns=headers)
+    #     if self.subjects is not None:
+    #         for subj in subjects:
+    #             print "Subject:", subj.label()
+    #             result = [subj.label()]
+    #             counts = xnat.getExptCounts(subj)
+    #             for expt in self.exptintervals.keys():
+    #                 etype = etypes[expt]
+    #                 if (etype in counts):
+    #                     result.append(counts[etype])
+    #                 else:
+    #                     result.append(0)
+    #
+    #             result.append(self.getStage(counts['firstvisit']))
+    #             self.counts.append(result)
+    #             print result
+    #     print self.counts
 
     def getStage(self,vdate):
         """
@@ -204,12 +221,14 @@ class OPEXReport(object):
             #sexpts = self.exptintervals
             headers = ['Subject'] + self.exptintervals.keys()
             if self.data is not None:
-                fdata = self.data[headers]
+                fdata = self.data[self.data.Group != 'withdrawn']
+                fdata = fdata[headers]
+
             elif self.counts is not None:
                 fdata = self.counts
-            fdata = self.data[self.data.Group != 'withdrawn']
+
             report = fdata.copy()
-            report["Progress"]=""
+            report['Progress']=''
             for s in sorted(self.subjectids):
                 print "Subject:", s
                 result = [s]
@@ -220,7 +239,7 @@ class OPEXReport(object):
                 if self.data is not None:
                     smonth = int(list(sdata['CANTAB DMS'])[0]) #determine how far through the trial
                 elif self.counts is not None and sdata['Stage'] is not None:
-                    smonth = sdata['Stage'][0]
+                    smonth = int(list(sdata['Stage'])[0])
                 sprogress = (100 * smonth/self.maxmth)
                 print "Progress:", smonth, "month", sprogress, "%"
                 #for each expt - list number collected
@@ -237,6 +256,7 @@ class OPEXReport(object):
 
                     result.append(v)
                 result.append(smonth)
+                result.append(sprogress)
                 report.iloc[x] = result
 
             print report
@@ -268,22 +288,6 @@ class OPEXReport(object):
         return dt.strftime("%Y-%m-%d")
 
 ########################################################################
-def work(number):
-    """
-        Multiprocessing work
-
-        Parameters
-        ----------
-        number : integer
-            unit of work number
-        """
-    print "Unit of work number %d" % number  # simply print the worker's number
-
-def counts(tasks):
-    subject = tasks[0]
-    xnat = tasks[1]
-    counts = xnat.getExptCounts(subject)
-    print counts
 
 if __name__ == "__main__":
     from qbixnat.XnatConnector import XnatConnector #Only for testing
@@ -327,24 +331,37 @@ if __name__ == "__main__":
             msg = "Loaded %d subjects from %s" % (len(subjects.fetchall()), proj.id())
             print msg
             op = OPEXReport(subjects=subjects)
+            op.xnat = xnat
             df = op.getParticipants()
             print df
 
 
             print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
-            number_processes = 2
-            pool = multiprocessing.Pool(number_processes)
-            total_tasks = len(subjects.fetchall())
-            tasks = range(total_tasks)
-            print tasks
-            #results = pool.map_async(work, tasks)
-            results = pool.map_async(xnat.getExptCounts, (subjects,))
-            print results.get(timeout=1)
-            # # Get counts from database
-            # df_counts = op.getCounts(xnat)
-            # print df_counts
-            pool.close()
-            pool.join()
+            active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
+            subjects = list(active_subjects)
+            start = time.time()
+            total_tasks = len(subjects)
+            tasks = []
+            mm = multiprocessing.Manager()
+            q = mm.dict()
+            for i in range(total_tasks):
+                p = multiprocessing.Process(target=op.processCounts, args=(subjects[i],q))
+                tasks.append(p)
+                p.start()
+
+            for p in tasks:
+                p.join()
+
+            print "Finished:", time.time() - start, 'secs'
+
+
+            print "*****All Counts:******"
+            headers = ['Subject'] + op.exptintervals.keys() + ['Stage', 'Progress']
+            print q.values()
+            op.counts = pandas.DataFrame(q.values(), columns=headers)
+            print op.counts
+            op.printMissingExpts()
+
         except ValueError as e:
             print "Error: Failed to connect", e
         finally:

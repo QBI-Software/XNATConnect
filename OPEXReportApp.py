@@ -3,10 +3,13 @@ import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
 import pandas as pd
-from os.path import expanduser, join
+from os.path import expanduser, join, exists
 from qbixnat.XnatConnector import XnatConnector  # Only for testing
 from qbixnat.OPEXReport import OPEXReport
-
+import time
+import multiprocessing
+from datetime import datetime
+import pandas as pd
 """ 
 From https://plot.ly/dash/getting-started
 """
@@ -140,17 +143,50 @@ if __name__ == '__main__':
         print "...Connected"
         subjects = xnat.get_subjects(projectcode)
         if (subjects.fetchone() is not None):
-            #report = OPEXReport(subjects)
-            #report = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
-            report = OPEXReport(csvfile="sampledata\\opex_counts.csv")
             op = OPEXReportApp()
+            output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
+            outputfile = join("sampledata",output)
+            if exists(outputfile):
+                report = OPEXReport(csvfile=outputfile)
+                cache = True
+            else:
+                report = OPEXReport(subjects)
+                cache = False
+
+            report.xnat = xnat
+
             df = report.getParticipants()
             print('Participants loaded:', df)
-            #report_expts = OPEXReport(csvfile="sampledata\\mva\\MVA_Participants_Expts.csv")
-            df_expts = report.getExptCollection()
-            print df_expts.head()
+            #Get counts from database if not cached (slow)
+            if not cache:
+                active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
+                subjects = list(active_subjects)
+                start = time.time()
+                total_tasks = len(subjects)
+                tasks = []
+                mm = multiprocessing.Manager()
+                q = mm.dict()
+                for i in range(total_tasks):
+                    p = multiprocessing.Process(target=report.processCounts, args=(subjects[i], q))
+                    tasks.append(p)
+                    p.start()
+
+                for p in tasks:
+                    p.join()
+
+                print "Finished multiprocessing:", time.time() - start, 'secs'
+                headers = ['Subject'] + report.exptintervals.keys() + ['Stage', 'Progress']
+                report.counts = pd.DataFrame(q.values(), columns=headers)
+
+                report.counts.to_csv(outputfile) #cache
+
+            print report.counts
             df_report = report.printMissingExpts()
             df_report.sort_values(by='Progress', inplace=True, ascending=False)
+            #Get expts
+            df_expts = report.getExptCollection()
+            print df_expts.head()
+
             # reactive loading to app
             op.app.layout = op.participants_layout(df, df_expts, df_report)
             op.app.run_server(debug=True, port=8089)
