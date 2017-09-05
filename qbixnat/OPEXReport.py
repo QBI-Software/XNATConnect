@@ -37,7 +37,7 @@ class OPEXReport(object):
         self.minmth = 0
         self.maxmth = 12
         self.exptintervals = self.__experiments()
-        self.counts = None
+        #self.counts = None
         if subjects is not None:
             self.subjects = subjects
             self.subjectids = [s.label() for s in subjects]
@@ -127,21 +127,22 @@ class OPEXReport(object):
         if self.data is not None:
             #Area chart or Stacked Bar Chart or Histogram
             groups = self.data
+        #elif self.counts is not None:
+        #    groups = self.counts
             #replace NaN with 0
             groups.fillna(0, inplace=True)
             #exclude withdrawn
             df = groups[groups.Group != 'withdrawn']
-            #sort by largest number expts (cantabDMS) - ascending
-            df = df.sort_values('CANTAB DMS')
+            #sort by largest number expts
+            if 'Stage' in df:
+                df = df.sort_values('Stage', ascending=True)
+            else:
+                df = df.sort_values('CANTAB DMS', ascending=True)
             #plot - exclude Subject, m/f,hand,yob
             cols = ['Group', 'Subject'] + self.exptintervals.keys()
             df = df[cols]
             #test plot
             #df.plot.area(x='Subject', y=cols[2:])
-        elif self.counts is not None:
-            df = self.counts
-            df = df.sort_values('CANTAB DMS')
-
         return df
 
     def processCounts(self,subj,q):
@@ -152,9 +153,8 @@ class OPEXReport(object):
         """
         result=[]
         if subj is not None:
-            headers = ['Subject'] + self.exptintervals.keys() + ['Stage']
             etypes = self._expt_types()
-            result = [subj.label()]
+            result = [subj.attrs.get('group'),subj.label(),subj.attrs.get('gender')]
             counts = self.xnat.getExptCounts(subj)
             for expt in self.exptintervals.keys():
                 etype = etypes[expt]
@@ -169,32 +169,6 @@ class OPEXReport(object):
         #print "Counts:", len(self.counts)
         return result
 
-    # def getCounts(self, xnat):
-    #     """
-    #     Experiment counts for all subjects - from database
-    #     :param xnat: connection to database
-    #     :return: dataframe as counts
-    #     """
-    #     headers = ['Subject'] + self.exptintervals.keys() + ['Stage']
-    #     etypes = self._expt_types()
-    #     if self.counts is None:
-    #         self.counts = pandas.DataFrame([], columns=headers)
-    #     if self.subjects is not None:
-    #         for subj in subjects:
-    #             print "Subject:", subj.label()
-    #             result = [subj.label()]
-    #             counts = xnat.getExptCounts(subj)
-    #             for expt in self.exptintervals.keys():
-    #                 etype = etypes[expt]
-    #                 if (etype in counts):
-    #                     result.append(counts[etype])
-    #                 else:
-    #                     result.append(0)
-    #
-    #             result.append(self.getStage(counts['firstvisit']))
-    #             self.counts.append(result)
-    #             print result
-    #     print self.counts
 
     def getStage(self,vdate):
         """
@@ -216,16 +190,18 @@ class OPEXReport(object):
         :param self:
         :return:
         """
-        if self.data is not None or self.counts is not None:
+        if self.data is not None: # or self.counts is not None:
             # find all experiments
             #sexpts = self.exptintervals
             headers = ['Subject'] + self.exptintervals.keys()
             if self.data is not None:
                 fdata = self.data[self.data.Group != 'withdrawn']
+                if 'Stage' in fdata:
+                    headers.append('Stage')
                 fdata = fdata[headers]
 
-            elif self.counts is not None:
-                fdata = self.counts
+           # elif self.counts is not None:
+            #    fdata = self.counts
 
             report = fdata.copy()
             report['Progress']=''
@@ -236,25 +212,20 @@ class OPEXReport(object):
                 if sdata.empty:
                     continue
                 x = sdata.index.tolist()[0]
-                if self.data is not None:
-                    smonth = int(list(sdata['CANTAB DMS'])[0]) #determine how far through the trial
-                elif self.counts is not None and sdata['Stage'] is not None:
+                if 'Stage' in sdata:
                     smonth = int(list(sdata['Stage'])[0])
+                else:
+                    smonth = int(list(sdata['CANTAB DMS'])[0]) #assume max tests *probably under-estimated
+
                 sprogress = (100 * smonth/self.maxmth)
                 print "Progress:", smonth, "month", sprogress, "%"
                 #for each expt - list number collected
                 for e in self.exptintervals.keys():
-                    v = False
                     sd = list(sdata[e])[0]
                     if (sd is None or np.isnan(sd)):
-                        print e, "None"
-                    elif(sd == len(range(self.minmth,smonth,self.exptintervals[e]))):
-                        print e, "Complete"
-                        v = True
-                    else:
-                        print e, "Partial"
-
-                    result.append(v)
+                        sd = 0
+                    num_missing = len(range(self.minmth, smonth, self.exptintervals[e])) - sd
+                    result.append(num_missing)
                 result.append(smonth)
                 result.append(sprogress)
                 report.iloc[x] = result
@@ -356,14 +327,14 @@ if __name__ == "__main__":
 
 
             print "*****All Counts:******"
-            headers = ['Subject'] + op.exptintervals.keys() + ['Stage', 'Progress']
+            headers = ['Group','Subject', 'M/F'] + op.exptintervals.keys() + ['Stage']
             print q.values()
             op.counts = pandas.DataFrame(q.values(), columns=headers)
             print op.counts
             op.printMissingExpts()
 
         except ValueError as e:
-            print "Error: Failed to connect", e
+            print "Error: ", e
         finally:
             xnat.conn.disconnect()
             print("FINISHED")

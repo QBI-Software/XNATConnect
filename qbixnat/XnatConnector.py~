@@ -203,8 +203,11 @@ class XnatConnector:
         :return:
         """
         scounts = {}
+
+
         if subject is not None:
             expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
+            #expts = subject.experiments() #returns list of expt obj cf experiments() alone returns collection and subsequent calls each expt
             #print "Subject has expts: ", len(expts)
             expt_types =[]
             expt_dates=[]
@@ -221,7 +224,6 @@ class XnatConnector:
                     scounts[expt] = scounts[expt] + 1
                 else:
                     scounts[expt] = 1
-
         print "Subject counts:", subject.id(), scounts
         return scounts
 
@@ -466,13 +468,11 @@ if __name__ == "__main__":
 
             if (args.counts is not None and args.counts):
                 subjects = list(xnat.get_subjects(projectcode))
-                #XNAT COUNTS - no multiprocessing
-                # start=time.time()
-                # #subject = xnat.get_subjects(projectcode).fetchone()
-                # for subject in subjects:
-                #     counts = xnat.getExptCounts(subject)
-                # print "COUNTS for all subjects: ", time.time() - start, 'secs' #905.512000084 secs
-                # XNAT COUNTS - with multiprocessing
+                start=time.time()
+                subject = xnat.get_subjects(projectcode).fetchone()
+                counts = xnat.getExptCounts(subject)
+                print "COUNTS for one subject: ", time.time() - start, 'secs'
+
                 print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
                 start = time.time()
                 total_tasks = len(subjects)
@@ -490,7 +490,7 @@ if __name__ == "__main__":
                # result = pool.map(xnat.getExptCounts, subjects)
                 #print(result.get(timeout=1))
                 print result
-                print "Finished:", time.time() - start, 'secs' #Finished: 95.7839999199 secs
+                print "Finished:", time.time() - start, 'secs'
 
             if (args.m is not None and args.m):
                 for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:

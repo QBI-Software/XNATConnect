@@ -9,6 +9,7 @@ from qbixnat.OPEXReport import OPEXReport
 import time
 import multiprocessing
 from datetime import datetime
+from matplotlib import colors as mcolors
 import pandas as pd
 """ 
 From https://plot.ly/dash/getting-started
@@ -26,15 +27,16 @@ class OPEXReportApp(object):
         return colors
 
     def tablecell(self,val):
-        if type(val) == bool:
-            if val == True:
+        mycolors = list(mcolors.CSS4_COLORS.keys())
+
+        if type(val) != str:
+            if val == 0:
                 return html.Td([html.Span(className="glyphicon glyphicon-ok")],
-                                className="alert-success")
+                               className="btn-success")
             else:
-                return html.Td([html.Span(className="glyphicon glyphicon-remove")],
-                               className="alert-danger")
+                return html.Td([html.Span(val)], style={'color':'black','background-color': mcolors.CSS4_COLORS[mycolors[val]]})
         else:
-            return val
+            return html.Td(val)
 
     def generate_table(self,dataframe, max_rows=10):
         colors = self.colors()
@@ -157,7 +159,7 @@ if __name__ == '__main__':
 
             df = report.getParticipants()
             print('Participants loaded:', df)
-            #Get counts from database if not cached (slow)
+            #Get counts from database if not CSV
             if not cache:
                 active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
                 subjects = list(active_subjects)
@@ -175,12 +177,10 @@ if __name__ == '__main__':
                     p.join()
 
                 print "Finished multiprocessing:", time.time() - start, 'secs'
-                headers = ['Subject'] + report.exptintervals.keys() + ['Stage', 'Progress']
-                report.counts = pd.DataFrame(q.values(), columns=headers)
-
-                report.counts.to_csv(outputfile) #cache
-
-            print report.counts
+                headers = ['Group','Subject', 'M/F'] + report.exptintervals.keys() + ['Stage']
+                report.data = pd.DataFrame(q.values(), columns=headers)
+                report.data.to_csv(outputfile, index=False) #cache
+                print report.data
             df_report = report.printMissingExpts()
             df_report.sort_values(by='Progress', inplace=True, ascending=False)
             #Get expts
