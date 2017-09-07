@@ -12,6 +12,7 @@ Created on Thu Mar 2 2017
 from os import listdir, R_OK, path, mkdir, access
 from os.path import isdir, join
 import argparse
+import sys
 import re
 import glob
 import shutil
@@ -21,18 +22,19 @@ from dicom.filereader import InvalidDicomError, read_file
 
 if __name__ == "__main__":
     # Read dirlist until get to *.dcm or *.IMA
-    parser = argparse.ArgumentParser(prog='XnatOrganizeFiles',
+    parser = argparse.ArgumentParser(prog=sys.argv[0],
                                      description='''\
             Reads directories and creates directory structure suitable for XNAT upload
             - expects this input dir format: SUBJECTID/Group/*.IMA (mixed series)
             - note this will not work if directory structure is different.
             - outputs format: sortedscans/SUBJECTID/scans/series/*.IMA
-            - run XnatUploadScans with "--u sortedscans"
+            - EXAMPLE: (where data/raw contains SUBJECTID folders)
+            python XnatOrganizeFiles.py "data/raw" --scandir "data/sortedscans"
 
              ''')
     parser.add_argument('inputdir', action='store', help='Top level file directory eg SUBJECTID')
     parser.add_argument('--scandir', action='store', help='Copy scans to this directory for upload to XNAT')
-
+    parser.add_argument('--opexid', action='store_true', help='SUBJECTID directories in OPEX format eg 1001DS')
     args = parser.parse_args()
     series ={}
     #pattern = '^([0-9A-Z_\.]+)(\d{4})\..*'
@@ -50,7 +52,10 @@ if __name__ == "__main__":
         datapath = join(dirpath, 'sortedscans')
     origdatapath = datapath
     #Check only subject dirs processed
-    pattern = re.compile('^\d{4}[A-Za-z0-9]+$')
+    if args.opexid is not None and args.opexid:
+        pattern = re.compile('^\d{4}[A-Za-z0-9]+$')
+    else:
+        pattern = re.compile('[A-Za-z0-9\_\.\-]+')
 
     #Create MRI sessions for each subject directory
     for subject in listdir(inputdir):
