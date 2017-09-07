@@ -133,11 +133,20 @@ class OPEXReportApp(object):
 #####################################################################
 
 if __name__ == '__main__':
+    import sys
+    import argparse
 
     home = expanduser("~")
     configfile = join(home, '.xnat.cfg')
-    database = 'opex'
-    projectcode = 'P1'
+    parser = argparse.ArgumentParser(prog=sys.argv[0],
+                                     description='''\
+            Report App for data in QBI OPEX XNAT db
+             ''')
+    parser.add_argument('database', action='store', help='select database config from xnat.cfg to connect to')
+    parser.add_argument('projectcode', action='store', help='select project by code')
+    args = parser.parse_args()
+    database = args.database
+    projectcode = args.projectcode
     xnat = XnatConnector(configfile, database)
     print "Connecting to URL=", xnat.url
     xnat.connect()
