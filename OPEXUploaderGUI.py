@@ -87,7 +87,7 @@ class OPEXUploaderGUI(wx.Frame):
         self.dirname = ''
         dlg = wx.DirDialog(self, "Choose a directory containing input files", self.dirname)
         if dlg.ShowModal() == wx.ID_OK:
-            self.dirname = dlg.GetPath()
+            self.dirname = str(dlg.GetPath())
             self.StatusBar.SetStatusText("Loaded: %s\n" % self.dirname)
             self.inputedit.SetValue(self.dirname)
         dlg.Destroy()
