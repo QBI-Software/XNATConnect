@@ -204,14 +204,15 @@ class XnatConnector:
         """
         scounts = {}
         if subject is not None:
-            expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
+            #expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
             #print "Subject has expts: ", len(expts)
             expt_types =[]
             expt_dates=[]
-            for e in expts:
-                expt_types.append(e[0])
-                if e[1] is not None and len(e[1]) > 0:
-                    expt_dates.append(datetime.datetime.strptime(e[1], '%Y-%m-%d') )
+            for e in subject.experiments():
+                expt_types.append(e.datatype())
+                edate = e.attrs.get('date')
+                if edate is not None and len(edate) > 0:
+                    expt_dates.append(datetime.datetime.strptime(edate, '%Y-%m-%d') )
             if (len(expt_dates) > 0):
                 scounts['firstvisit'] = min(expt_dates)
             else:

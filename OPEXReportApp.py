@@ -36,7 +36,8 @@ class OPEXReportApp(object):
                             format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
 
     def __loadParams(self):
-        params = 'opex.cfg' #environ['OPEXREPORT_PARAMS']
+        home = expanduser('~')
+        params = join(home,'.opex.cfg')
         if params is not None and access(params, R_OK):
             config = ConfigObj(params)
             self.database = config['DATABASE']
@@ -48,10 +49,9 @@ class OPEXReportApp(object):
             logging.error('Unable to read config - using defaults')
             self.database = 'opex-ro'
             self.project = 'P1'
-            self.cache = '/home/twin/xnat/XnatConnect/cache'
-            home = expanduser('~')
+            self.cache = 'cache'
             self.dbconfig = join(home,'.xnat.cfg')
-            self.logs = '/home/twin/xnat/XnatConnect/logs'
+            self.logs = 'logs'
 
     def loadData(self):
         output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
