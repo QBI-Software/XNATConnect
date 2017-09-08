@@ -11,13 +11,109 @@ import multiprocessing
 from datetime import datetime
 from matplotlib import colors as mcolors
 import pandas as pd
+from os import environ
+from configobj import ConfigObj
+import logging
+import sys
+
 """ 
 From https://plot.ly/dash/getting-started
 """
+#for PythonAnywhere hosting @app.route('/')
+def main():
+    op = OPEXReportApp()
+    op.loadData()
+    # reactive loading to app
+    op.app.layout = op.participants_layout()
+    op.app.run_server(debug=True, port=8089)
+
+
+######################
 class OPEXReportApp(object):
 
     def __init__(self):
         self.app = dash.Dash()
+        self.database = None
+        self.project = None
+        self.countscache = None
+        self.dbconfig = None
+        self.df_participants = {}
+        self.df_report = {}
+        self.df_expts = {}
+        self.__loadParams()
+        logging.basicConfig(filename='xnatreport.log', dir=self.logs, level=logging.DEBUG,
+                            format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
+
+    def __loadParams(self):
+        params = 'opex.cfg' #environ['OPEXREPORT_PARAMS']
+        if params is not None:
+            config = ConfigObj(params)
+            self.database = config['DATABASE']
+            self.project = config['PROJECT']
+            self.cache = config['CACHEDIR']
+            self.dbconfig = config['DBCONFIG']
+            self.logs = config['LOGS']
+
+    def loadData(self):
+        output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
+        outputfile = join(self.cache, output)
+        if exists(outputfile):
+            report = OPEXReport(csvfile=outputfile)
+            logging.info("Loading via cache")
+        else:
+            logging.info("Loading from database")
+            configfile = self.dbconfig
+            xnat = XnatConnector(configfile, self.database)
+            try:
+                xnat.connect()
+                if xnat.testconnection():
+                    print "...Connected"
+                    subjects = xnat.get_subjects(self.project)
+                    if (subjects.fetchone() is not None):
+                        report = OPEXReport(subjects)
+                        report.xnat = xnat
+                        active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
+                        subjects = list(active_subjects)
+                        #Parallel processing for getting counts
+                        start = time.time()
+                        logging.info("Starting multiprocessing ..." + str(start))
+
+                        total_tasks = len(subjects)
+                        tasks = []
+                        mm = multiprocessing.Manager()
+                        q = mm.dict()
+                        for i in range(total_tasks):
+                            p = multiprocessing.Process(target=report.processCounts, args=(subjects[i], q))
+                            tasks.append(p)
+                            p.start()
+
+                        for p in tasks:
+                            p.join()
+
+                        logging.info("Finished multiprocessing:" +  str(time.time() - start) + 'secs')
+                        headers = ['Group', 'Subject', 'M/F'] + report.exptintervals.keys() + ['Stage']
+                        report.data = pd.DataFrame(q.values(), columns=headers)
+                        report.data.to_csv(outputfile, index=False)  # cache
+                        logging.info("Data saved to cache: " + outputfile)
+            except IOError:
+                logging.error("Connection error - terminating app")
+                print "Connection error - terminating app"
+                sys.exit(1)
+            finally:
+                xnat.conn.disconnect()
+
+        #Generate dataframes for display
+        self.df_participants = report.getParticipants()
+        logging.debug('Participants loaded')
+        print self.df_participants
+        self.df_report = report.printMissingExpts()
+        self.df_report.sort_values(by='Progress', inplace=True, ascending=False)
+        logging.debug("Missing experiments loaded")
+        print self.df_report.head()
+        # Get expts
+        self.df_expts = report.getExptCollection()
+        logging.debug("Experiment collection loaded")
+        print self.df_expts.head()
 
     def colors(self):
         colors = {
@@ -27,14 +123,21 @@ class OPEXReportApp(object):
         return colors
 
     def tablecell(self,val):
-        mycolors = list(mcolors.CSS4_COLORS.keys())
+        basecolors = dict(mcolors.BASE_COLORS, **mcolors.CSS4_COLORS)
+        by_hsv = sorted((tuple(mcolors.rgb_to_hsv(mcolors.to_rgba(color)[:3])), name)
+                        for name, color in basecolors.items())
+        # Sort by hue, saturation, value and name.
+        mycolors = list(sorted(mcolors.CSS4_COLORS.keys()))
+
+            #sorted(mcolors.rgb_to_hsv(mcolors.to_rgba(color)[:3])for color in basecolors.items())
+            #ist(mcolors.CSS4_COLORS.keys())
 
         if type(val) != str:
-            if val == 0:
+            if val <= 0:
                 return html.Td([html.Span(className="glyphicon glyphicon-ok")],
                                className="btn-success")
             else:
-                return html.Td([html.Span(val)], style={'color':'black','background-color': mcolors.CSS4_COLORS[mycolors[val]]})
+                return html.Td([html.Span(val)], style={'color':'black','background-color': mycolors[val]})
         else:
             return html.Td(val)
 
@@ -55,7 +158,14 @@ class OPEXReportApp(object):
                     'color': colors['text']
                 })
 
-    def participants_layout(self, df, df_expts, df_report):
+    def participants_layout(self):
+        df = self.df_participants
+        df_expts = self.df_expts
+        df_report = self.df_report
+        if df is None or df_expts is None or df_report is None:
+            logging.error("No data to load")
+            return 0
+
         colors = self.colors()
         title = 'OPEX XNAT participants [Total=' + str(sum(df['All'])) + ']'
         #self.app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
@@ -133,76 +243,4 @@ class OPEXReportApp(object):
 #####################################################################
 
 if __name__ == '__main__':
-    import sys
-    import argparse
-
-    home = expanduser("~")
-    configfile = join(home, '.xnat.cfg')
-    parser = argparse.ArgumentParser(prog=sys.argv[0],
-                                     description='''\
-            Report App for data in QBI OPEX XNAT db
-             ''')
-    parser.add_argument('database', action='store', help='select database config from xnat.cfg to connect to')
-    parser.add_argument('projectcode', action='store', help='select project by code')
-    args = parser.parse_args()
-    database = args.database
-    projectcode = args.projectcode
-    xnat = XnatConnector(configfile, database)
-    print "Connecting to URL=", xnat.url
-    xnat.connect()
-    if xnat.testconnection():
-        print "...Connected"
-        subjects = xnat.get_subjects(projectcode)
-        if (subjects.fetchone() is not None):
-            op = OPEXReportApp()
-            output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
-            outputfile = join("sampledata",output)
-            if exists(outputfile):
-                report = OPEXReport(csvfile=outputfile)
-                cache = True
-            else:
-                report = OPEXReport(subjects)
-                cache = False
-
-            report.xnat = xnat
-
-            df = report.getParticipants()
-            print('Participants loaded:', df)
-            #Get counts from database if not CSV
-            if not cache:
-                active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
-                subjects = list(active_subjects)
-                start = time.time()
-                total_tasks = len(subjects)
-                tasks = []
-                mm = multiprocessing.Manager()
-                q = mm.dict()
-                for i in range(total_tasks):
-                    p = multiprocessing.Process(target=report.processCounts, args=(subjects[i], q))
-                    tasks.append(p)
-                    p.start()
-
-                for p in tasks:
-                    p.join()
-
-                print "Finished multiprocessing:", time.time() - start, 'secs'
-                headers = ['Group','Subject', 'M/F'] + report.exptintervals.keys() + ['Stage']
-                report.data = pd.DataFrame(q.values(), columns=headers)
-                report.data.to_csv(outputfile, index=False) #cache
-                print report.data
-            df_report = report.printMissingExpts()
-            df_report.sort_values(by='Progress', inplace=True, ascending=False)
-            #Get expts
-            df_expts = report.getExptCollection()
-            print df_expts.head()
-
-            # reactive loading to app
-            op.app.layout = op.participants_layout(df, df_expts, df_report)
-            op.app.run_server(debug=True, port=8089)
-        else:
-            print "No subjects found - Check PROJECT CODE is correct"
-        xnat.conn.disconnect()
-        print("FINISHED")
-
-    else:
-        print "Failed to connect"
+    main()
