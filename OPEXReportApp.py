@@ -26,7 +26,7 @@ class OPEXReportApp(object):
         self.app = dash.Dash(__name__)
         self.database = None
         self.project = None
-        self.countscache = None
+        self.cache = None
         self.dbconfig = None
         self.df_participants = {}
         self.df_report = {}
@@ -48,10 +48,10 @@ class OPEXReportApp(object):
             logging.error('Unable to read config - using defaults')
             self.database = 'opex-ro'
             self.project = 'P1'
-            self.cache = 'cache'
+            self.cache = '/home/twin/xnat/XnatConnect/cache'
             home = expanduser('~')
             self.dbconfig = join(home,'.xnat.cfg')
-            self.logs = 'logs'
+            self.logs = '/home/twin/xnat/XnatConnect/logs'
 
     def loadData(self):
         output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
