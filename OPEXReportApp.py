@@ -32,7 +32,7 @@ class OPEXReportApp(object):
         self.df_report = {}
         self.df_expts = {}
         self.__loadParams()
-        logging.basicConfig(filename='xnatreport.log', dir=self.logs, level=logging.DEBUG,
+        logging.basicConfig(filename=join(self.logs,'xnatreport.log'), level=logging.DEBUG,
                             format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
 
     def __loadParams(self):
