@@ -17,22 +17,13 @@ import logging
 import sys
 
 """ 
-From https://plot.ly/dash/getting-started
+OPEX Report DASHBOARD via DASH
 """
-#for PythonAnywhere hosting @app.route('/')
-def main():
-    op = OPEXReportApp()
-    op.loadData()
-    # reactive loading to app
-    op.app.layout = op.participants_layout()
-    op.app.run_server(debug=True, port=8089)
 
-
-######################
 class OPEXReportApp(object):
 
     def __init__(self):
-        self.app = dash.Dash()
+        self.app = dash.Dash(__name__)
         self.database = None
         self.project = None
         self.countscache = None
@@ -242,5 +233,15 @@ class OPEXReportApp(object):
 
 #####################################################################
 
+#for wsgi deployment
+op = OPEXReportApp()
+server  = op.app.server
+server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
+op.loadData()
+# reactive loading to app
+op.app.layout = op.participants_layout()
+
+
+# for local deployment
 if __name__ == '__main__':
-    main()
+    op.app.run_server(debug=True, port=8089)

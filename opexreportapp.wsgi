@@ -4,4 +4,4 @@ path = '/mypath/site'
 if path not in sys.path:
    sys.path.append(path)
 
-from OPEXReportApp import OPEXReportApp.main as application
+from OPEXReportApp import OPEXReportApp.app as application
