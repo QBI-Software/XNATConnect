@@ -11,7 +11,7 @@ import multiprocessing
 from datetime import datetime
 from matplotlib import colors as mcolors
 import pandas as pd
-from os import environ
+from os import environ,access,R_OK
 from configobj import ConfigObj
 import logging
 import sys
@@ -37,13 +37,21 @@ class OPEXReportApp(object):
 
     def __loadParams(self):
         params = 'opex.cfg' #environ['OPEXREPORT_PARAMS']
-        if params is not None:
+        if params is not None and access(params, R_OK):
             config = ConfigObj(params)
             self.database = config['DATABASE']
             self.project = config['PROJECT']
             self.cache = config['CACHEDIR']
             self.dbconfig = config['DBCONFIG']
             self.logs = config['LOGS']
+        else:
+            logging.error('Unable to read config - using defaults')
+            self.database = 'opex-ro'
+            self.project = 'P1'
+            self.cache = 'cache'
+            home = expanduser('~')
+            self.dbconfig = join(home,'.xnat.cfg')
+            self.logs = 'logs'
 
     def loadData(self):
         output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
@@ -238,7 +246,6 @@ op = OPEXReportApp()
 server  = op.app.server
 server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
 op.loadData()
-# reactive loading to app
 op.app.layout = op.participants_layout()
 
 
