@@ -204,7 +204,7 @@ class OPEXReport(object):
             #    fdata = self.counts
 
             report = fdata.copy()
-            report['Progress']=''
+            #report['Progress']=''
             for s in sorted(self.subjectids):
                 print "Subject:", s
                 result = [s]
@@ -217,8 +217,8 @@ class OPEXReport(object):
                 else:
                     smonth = int(list(sdata['CANTAB DMS'])[0]) #assume max tests *probably under-estimated
 
-                sprogress = (100 * smonth/self.maxmth)
-                print "Progress:", smonth, "month", sprogress, "%"
+                #sprogress = (100 * smonth/self.maxmth)
+                #print "Progress:", smonth, "month", sprogress, "%"
                 #for each expt - list number collected
                 for e in self.exptintervals.keys():
                     sd = list(sdata[e])[0]
@@ -227,7 +227,7 @@ class OPEXReport(object):
                     num_missing = len(range(self.minmth, smonth, self.exptintervals[e])) - sd
                     result.append(num_missing)
                 result.append(smonth)
-                result.append(sprogress)
+                #result.append(sprogress)
                 report.iloc[x] = result
 
             print report

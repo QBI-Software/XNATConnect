@@ -10,6 +10,7 @@ import time
 import multiprocessing
 from datetime import datetime
 from matplotlib import colors as mcolors
+import matplotlib.pyplot as plt
 import pandas as pd
 from os import environ,access,R_OK
 from configobj import ConfigObj
@@ -106,7 +107,7 @@ class OPEXReportApp(object):
         logging.debug('Participants loaded')
         print self.df_participants
         self.df_report = report.printMissingExpts()
-        self.df_report.sort_values(by='Progress', inplace=True, ascending=False)
+        self.df_report.sort_values(by=['Stage','Subject'], inplace=True, ascending=False)
         logging.debug("Missing experiments loaded")
         print self.df_report.head()
         # Get expts
@@ -122,21 +123,18 @@ class OPEXReportApp(object):
         return colors
 
     def tablecell(self,val):
-        basecolors = dict(mcolors.BASE_COLORS, **mcolors.CSS4_COLORS)
-        by_hsv = sorted((tuple(mcolors.rgb_to_hsv(mcolors.to_rgba(color)[:3])), name)
-                        for name, color in basecolors.items())
+
         # Sort by hue, saturation, value and name.
         mycolors = list(sorted(mcolors.CSS4_COLORS.keys()))
-
-            #sorted(mcolors.rgb_to_hsv(mcolors.to_rgba(color)[:3])for color in basecolors.items())
-            #ist(mcolors.CSS4_COLORS.keys())
+        #mycolors = plt.get_cmap('jet') -> mycolors(0.5)
 
         if type(val) != str:
             if val <= 0:
                 return html.Td([html.Span(className="glyphicon glyphicon-ok")],
                                className="btn-success")
             else:
-                return html.Td([html.Span(val)], style={'color':'black','background-color': mycolors[val]})
+                valcolor = val+10
+                return html.Td([html.Span(val)], style={'color':'black','background-color': mycolors[valcolor]})
         else:
             return html.Td(val)
 
@@ -242,13 +240,16 @@ class OPEXReportApp(object):
 #####################################################################
 
 #for wsgi deployment
-op = OPEXReportApp()
-server  = op.app.server
-server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
-op.loadData()
-op.app.layout = op.participants_layout()
+#op = OPEXReportApp()
+#server  = op.app.server
+#server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
+#op.loadData()
+#op.app.layout = op.participants_layout()
 
 
 # for local deployment
 if __name__ == '__main__':
+    op = OPEXReportApp()
+    op.loadData()
+    op.app.layout = op.participants_layout()
     op.app.run_server(debug=True, port=8089)
