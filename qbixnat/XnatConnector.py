@@ -21,6 +21,7 @@ import datetime
 import time
 import dicom
 import pyxnat
+import pandas as pd
 from configobj import ConfigObj
 
 warnings.filterwarnings("ignore")
@@ -196,35 +197,85 @@ class XnatConnector:
         else:
             print("No expts found with label=", oldlabel)
 
-    def getExptCounts(self,subject):
+    def getSubjects(self,projectcode, dsitype=None,columns=None, criteria=None):
         """
-        Create counts table per subject, including current stage
-        :param subject:
+        Gets subject label, id as dataframe
+        :param projectcode:
         :return:
         """
-        scounts = {}
-        if subject is not None:
-            #expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
-            #print "Subject has expts: ", len(expts)
-            expt_types =[]
-            expt_dates=[]
-            for e in subject.experiments():
-                expt_types.append(e.datatype())
-                edate = e.attrs.get('date')
-                if edate is not None and len(edate) > 0:
-                    expt_dates.append(datetime.datetime.strptime(edate, '%Y-%m-%d') )
-            if (len(expt_dates) > 0):
-                scounts['firstvisit'] = min(expt_dates)
-            else:
-                scounts['firstvisit'] = None
-            for expt in expt_types:
-                if expt in scounts.keys():
-                    scounts[expt] = scounts[expt] + 1
-                else:
-                    scounts[expt] = 1
+        if columns is None:
+            columns = ['xnat:subjectData/SUBJECT_LABEL', 'xnat:subjectData/SUBJECT_ID','xnat:subjectData/SUB_GROUP','xnat:subjectData/GENDER_TEXT', 'xnat:subjectData/DOB']
+        if criteria is None:
+            criteria = [('xnat:subjectData/SUBJECT_ID', 'LIKE', '*'), 'AND']
+        if dsitype is None:
+            dsitype = 'xnat:subjectData'
+        subj = self.conn.select(dsitype, columns).where(criteria)
+        #Convert to dataframe
+        if len(subj) > 0:
+            df_subjects = pd.DataFrame(list(subj))
+            if 'xnat_subjectdata_subject_id' in df_subjects.columns:
+                df_subjects.rename(columns={'xnat_subjectdata_subject_id': 'subject_id'},inplace=True)
+            #print(df_subjects.head())
+        else:
+            df_subjects = None
+        return df_subjects
 
-        print "Subject counts:", subject.id(), scounts
-        return scounts
+    def getOPEXExpts(self,projectcode,headers=None):
+        """
+        Get Expt data to parse
+        :return:
+        """
+        etypes = sorted(self.conn.inspect.datatypes())
+        df_subjects = self.getSubjects(projectcode)
+        # Cannot load all at once nor can get count directly so loop through each datatype and compile counts
+        for etype in etypes:
+            print "Expt type:", etype
+            if etype.startswith('opex'):
+                #fields = self.conn.inspect.datatypes(etype)
+                columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL']
+                criteria = [(etype + '/SUBJECT_ID', 'LIKE', '*'), 'AND']
+                df_dates = self.getSubjects(projectcode, etype, columns, criteria)
+                if df_dates is not None:
+                    aggreg = {'subject_id': {etype:'count'}, 'date': {etype+'_date': 'min'}}
+                    df_counts = df_dates.groupby('subject_id').agg(aggreg).reset_index()
+                    df_counts.columns = df_counts.columns.droplevel(level=0)
+                    df_counts.columns = ['subject_id', etype + '_visit', etype]
+                    df_subjects = df_subjects.merge(df_counts, how='left', on='subject_id')
+                    print len(df_subjects)
+
+        print(df_subjects.head())
+
+        return df_subjects
+
+    # def getExptCounts(self,subject):
+    #     """
+    #     Create counts table per subject, including current stage
+    #     :param subject:
+    #     :return:
+    #     """
+    #     scounts = {}
+    #     if subject is not None:
+    #         #expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
+    #         #print "Subject has expts: ", len(expts)
+    #         expt_types =[]
+    #         expt_dates=[]
+    #         for e in subject.experiments():
+    #             expt_types.append(e.datatype())
+    #             edate = e.attrs.get('date')
+    #             if edate is not None and len(edate) > 0:
+    #                 expt_dates.append(datetime.datetime.strptime(edate, '%Y-%m-%d') )
+    #         if (len(expt_dates) > 0):
+    #             scounts['firstvisit'] = min(expt_dates)
+    #         else:
+    #             scounts['firstvisit'] = None
+    #         for expt in expt_types:
+    #             if expt in scounts.keys():
+    #                 scounts[expt] = scounts[expt] + 1
+    #             else:
+    #                 scounts[expt] = 1
+    #
+    #     print "Subject counts:", subject.id(), scounts
+    #     return scounts
 
     def upload_MRIscans(self, projectcode, scandir):
         """
@@ -466,34 +517,13 @@ if __name__ == "__main__":
                 xnat.changeExptLabel(projectcode, args.c1, args.c2)
 
             if (args.counts is not None and args.counts):
-                subjects = list(xnat.get_subjects(projectcode))
-                #XNAT COUNTS - no multiprocessing
-                # start=time.time()
-                # #subject = xnat.get_subjects(projectcode).fetchone()
-                # for subject in subjects:
-                #     counts = xnat.getExptCounts(subject)
-                # print "COUNTS for all subjects: ", time.time() - start, 'secs' #905.512000084 secs
-                # XNAT COUNTS - with multiprocessing
-                print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
-                start = time.time()
-                total_tasks = len(subjects)
-                tasks = []
-                for i in range(total_tasks):
-                    p = multiprocessing.Process(target=xnat.getExptCounts, args=(subjects[i],))
-                    tasks.append(p)
-                    p.start()
-                result=[]
-                for proc in tasks:
-                    proc.join()
-                    result.append(proc.exitcode)
-
-               # pool = multiprocessing.Pool(processes=3)
-               # result = pool.map(xnat.getExptCounts, subjects)
-                #print(result.get(timeout=1))
+                result = xnat.getOPEXExpts(projectcode)
                 print result
-                print "Finished:", time.time() - start, 'secs' #Finished: 95.7839999199 secs
+
 
             if (args.m is not None and args.m):
+                etypes = sorted(xnat.conn.inspect.datatypes())
+                print(etypes)
                 for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
                     xnat.delete_experiments(projectcode,dtype,{'status': 'COMPLETED'}) # 'status': 'SYSTEM_ERROR'
         except ValueError as e:

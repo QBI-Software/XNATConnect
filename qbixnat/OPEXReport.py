@@ -51,21 +51,21 @@ class OPEXReport(object):
     def __experiments(self):
         """Create list of experiments in set order"""
         fields= [('Health screening', 3),
-             ('ACER', 3),
+             ('ACER', 6),
              ('CANTAB DMS', 1),
              ('CANTAB ERT', 1),
              ('CANTAB MOT', 1),
              ('CANTAB PAL', 1),
              ('CANTAB SWM', 1),
-             ('MR Sessions', 6),
-             ('MRI ASHS', 6),
-             ('MRI FreeSurfer', 6),
              ('Virtual Water Maze', 3),
              ('PSQI', 3),
              ('DASS', 3),
              ('IPAQ', 3),
              ('Insomnia', 3),
-             ('Godin', 3)]
+             ('Godin', 3),
+             ('MR Sessions', 6),
+             ('MRI ASHS', 6),
+             ('MRI FreeSurfer', 6)]
         od = OrderedDict(fields)
         return od
 
@@ -78,15 +78,15 @@ class OPEXReport(object):
              ('CANTAB MOT','opex:cantabMOT'),
              ('CANTAB PAL','opex:cantabPAL'),
              ('CANTAB SWM','opex:cantabSWM'),
-             ('MR Sessions','xnat:mrSessionData'),
-             ('MRI ASHS','opex:mriashs'),
-             ('MRI FreeSurfer','opex:mrifs'),
              ('Virtual Water Maze','opex:amunet'),
              ('PSQI','opex:psqi'),
              ('DASS','opex:dass'),
              ('IPAQ','opex:ipaq'),
              ('Insomnia','opex:insomnia'),
-             ('Godin','opex:godin')]
+             ('Godin','opex:godin'),
+             ('MR Sessions','xnat:mrSessionData'),
+             ('MRI ASHS','opex:mriashs'),
+             ('MRI FreeSurfer','opex:mrifs')]
         od = OrderedDict(fields)
         return od
 
@@ -169,36 +169,82 @@ class OPEXReport(object):
         #print "Counts:", len(self.counts)
         return result
 
+    def getExptCounts(self, projectcode, headers):
+        if self.xnat is not None:
+            df_counts = self.xnat.getOPEXExpts(projectcode)
+            # Get first visit as starting point in study
+            v0 = df_counts.filter(regex="_visit", axis=1)
+            formatstring = '%Y-%m-%d'
+            v0.apply(lambda d: pandas.to_datetime(d, format=formatstring, errors='coerce'), axis=0)
+            v0.dropna(inplace=True)
 
-    def getStage(self,vdate):
+            df_counts['first_visit'] = v0.min(skipna=True, axis=0)
+
+            df_counts.replace([np.inf, -np.inf, np.nan], 0, inplace=True)
+            dfsubjects = self.formatCounts(df_counts, headers)
+        else:
+            print("Unable to get counts from database")
+            dfsubjects = None
+        return dfsubjects
+
+    def formatCounts(self,df_counts, headers=None):
+        """
+        Format counts dataframe with headers in order
+        :param df-counts: produced by Xnatconnector.getOPEXExpts
+        :return:
+        """
+
+        if not df_counts.empty:
+            print(df_counts.columns)
+            df_counts['Stage'] = df_counts['first_visit'].apply(lambda d: self.getStage(d))
+            etypes = self._expt_types()
+            #rename columns
+            df_counts.rename(columns={'sub_group':'Group','subject_label': 'Subject','gender_text':'M/F'}, inplace=True)
+            for etype in etypes:
+                df_counts.rename(columns={etypes[etype]: etype},inplace=True)
+            #reorder columns
+            if headers is not None:
+                df_counts.columns = headers
+
+            print df_counts.head()
+
+        return df_counts
+
+
+    def getStage(self,vdate, formatstring='%Y-%m-%d'):
         """
         Calculate stage in trial from first visit date
         :param vdate: datetime.datetime object
         :return: interval as 0,1,2 ...
         """
         months=0
-        if vdate is not None:
-            tdate = datetime.today()
-            dt = tdate - vdate
-            if dt.days > 0:
-                months = int(dt.days // 30)
+        if isinstance(vdate, str): # and not isinstance(vdate, datetime):
+            vdate = datetime.strptime(vdate, formatstring)
+        elif np.isnan(vdate) or int(vdate) == 0:
+            return months
+        tdate = datetime.today()
+        dt = tdate - vdate
+        if dt.days > 0:
+            months = int(dt.days // 30)
         return months
 
-    def printMissingExpts(self):
+    def printMissingExpts(self,projectcode=None):
         """
         Print expt counts with true/false if complete data set for current stage
         :param self:
         :return:
         """
-        if self.data is not None: # or self.counts is not None:
+        headers = ['Subject'] + self.exptintervals.keys()
+        if self.data is None and self.xnat is not None:
+            #Load from database
+            self.data = self.getExptCounts(projectcode, headers)
+        else:
             # find all experiments
-            #sexpts = self.exptintervals
-            headers = ['Subject'] + self.exptintervals.keys()
-            if self.data is not None:
-                fdata = self.data[self.data.Group != 'withdrawn']
-                if 'Stage' in fdata:
-                    headers.append('Stage')
-                fdata = fdata[headers]
+
+            fdata = self.data[self.data.Group != 'withdrawn']
+            if 'Stage' in fdata:
+                headers.append('Stage')
+            fdata = fdata[headers]
 
            # elif self.counts is not None:
             #    fdata = self.counts
@@ -233,13 +279,6 @@ class OPEXReport(object):
             print report
             return report
 
-            #Group
-            # df_grouped = groups.groupby(by='Group')
-            # df_grouped.plot.bar(x='Group',y=cols[2:])
-            # df_AIT = df_grouped.get_group('AIT')
-            # df_MIT = df_grouped.get_group('MIT')
-            # df_LIT = df_grouped.get_group('LIT')
-
 
     def getMultivariate(self, expts):
         """
@@ -249,6 +288,13 @@ class OPEXReport(object):
         """
         expts = pandas.DataFrame([e for e in expts])
         expts
+
+        # Group
+        # df_grouped = groups.groupby(by='Group')
+        # df_grouped.plot.bar(x='Group',y=cols[2:])
+        # df_AIT = df_grouped.get_group('AIT')
+        # df_MIT = df_grouped.get_group('MIT')
+        # df_LIT = df_grouped.get_group('LIT')
 
     def formatDobNumber(self,orig):
         """
@@ -305,33 +351,35 @@ if __name__ == "__main__":
             op.xnat = xnat
             df = op.getParticipants()
             print df
+            op.printMissingExpts(projectcode)
+
+            #NO MULTIPROCESSING REQUIRED
+            #
+            # print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
+            # active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
+            # subjects = list(active_subjects)
+            # start = time.time()
+            # total_tasks = len(subjects)
+            # tasks = []
+            # mm = multiprocessing.Manager()
+            # q = mm.dict()
+            # for i in range(total_tasks):
+            #     p = multiprocessing.Process(target=op.processCounts, args=(subjects[i],q))
+            #     tasks.append(p)
+            #     p.start()
+            #
+            # for p in tasks:
+            #     p.join()
+            #
+            # print "Finished:", time.time() - start, 'secs'
 
 
-            print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
-            active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
-            subjects = list(active_subjects)
-            start = time.time()
-            total_tasks = len(subjects)
-            tasks = []
-            mm = multiprocessing.Manager()
-            q = mm.dict()
-            for i in range(total_tasks):
-                p = multiprocessing.Process(target=op.processCounts, args=(subjects[i],q))
-                tasks.append(p)
-                p.start()
+            # print "*****All Counts:******"
+            # headers = ['Group','Subject', 'M/F'] + op.exptintervals.keys() + ['Stage']
+            # print q.values()
+            # op.counts = pandas.DataFrame(q.values(), columns=headers)
+            # print op.counts
 
-            for p in tasks:
-                p.join()
-
-            print "Finished:", time.time() - start, 'secs'
-
-
-            print "*****All Counts:******"
-            headers = ['Group','Subject', 'M/F'] + op.exptintervals.keys() + ['Stage']
-            print q.values()
-            op.counts = pandas.DataFrame(q.values(), columns=headers)
-            print op.counts
-            op.printMissingExpts()
 
         except ValueError as e:
             print "Error: ", e

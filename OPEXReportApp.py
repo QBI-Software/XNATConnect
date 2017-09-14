@@ -72,6 +72,9 @@ class OPEXReportApp(object):
                     if (subjects.fetchone() is not None):
                         report = OPEXReport(subjects)
                         report.xnat = xnat
+                        headers = ['Group', 'Subject', 'M/F'] + report.exptintervals.keys() + ['Stage']
+                        report.data = xnat.getExpts(self.project, headers)
+
                         active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
                         subjects = list(active_subjects)
                         #Parallel processing for getting counts
