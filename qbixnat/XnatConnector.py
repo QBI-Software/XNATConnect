@@ -197,7 +197,7 @@ class XnatConnector:
         else:
             print("No expts found with label=", oldlabel)
 
-    def getSubjects(self,projectcode, dsitype=None,columns=None, criteria=None):
+    def getSubjectsDataframe(self,projectcode, dsitype=None,columns=None, criteria=None):
         """
         Gets subject label, id as dataframe
         :param projectcode:
@@ -226,15 +226,15 @@ class XnatConnector:
         :return:
         """
         etypes = sorted(self.conn.inspect.datatypes())
-        df_subjects = self.getSubjects(projectcode)
+        df_subjects = self.getSubjectsDataframe(projectcode)
         # Cannot load all at once nor can get count directly so loop through each datatype and compile counts
         for etype in etypes:
             print "Expt type:", etype
             if etype.startswith('opex'):
                 #fields = self.conn.inspect.datatypes(etype)
-                columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL']
+                columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL',etype + '/DATA_VALID',etype + '/SAMPLE_QUALITY']
                 criteria = [(etype + '/SUBJECT_ID', 'LIKE', '*'), 'AND']
-                df_dates = self.getSubjects(projectcode, etype, columns, criteria)
+                df_dates = self.getSubjectsDataframe(projectcode, etype, columns, criteria)
                 if df_dates is not None:
                     aggreg = {'subject_id': {etype:'count'}, 'date': {etype+'_date': 'min'}}
                     df_counts = df_dates.groupby('subject_id').agg(aggreg).reset_index()
@@ -247,35 +247,6 @@ class XnatConnector:
 
         return df_subjects
 
-    # def getExptCounts(self,subject):
-    #     """
-    #     Create counts table per subject, including current stage
-    #     :param subject:
-    #     :return:
-    #     """
-    #     scounts = {}
-    #     if subject is not None:
-    #         #expts = [(e.datatype(), e.attrs.get('date')) for e in subject.experiments()]
-    #         #print "Subject has expts: ", len(expts)
-    #         expt_types =[]
-    #         expt_dates=[]
-    #         for e in subject.experiments():
-    #             expt_types.append(e.datatype())
-    #             edate = e.attrs.get('date')
-    #             if edate is not None and len(edate) > 0:
-    #                 expt_dates.append(datetime.datetime.strptime(edate, '%Y-%m-%d') )
-    #         if (len(expt_dates) > 0):
-    #             scounts['firstvisit'] = min(expt_dates)
-    #         else:
-    #             scounts['firstvisit'] = None
-    #         for expt in expt_types:
-    #             if expt in scounts.keys():
-    #                 scounts[expt] = scounts[expt] + 1
-    #             else:
-    #                 scounts[expt] = 1
-    #
-    #     print "Subject counts:", subject.id(), scounts
-    #     return scounts
 
     def upload_MRIscans(self, projectcode, scandir):
         """

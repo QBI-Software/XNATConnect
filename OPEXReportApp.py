@@ -19,6 +19,7 @@ import sys
 
 """ 
 OPEX Report DASHBOARD via DASH
+https://plot.ly/python/create-online-dashboard/
 """
 
 class OPEXReportApp(object):
@@ -48,75 +49,61 @@ class OPEXReportApp(object):
             self.logs = config['LOGS']
         else:
             logging.error('Unable to read config - using defaults')
-            self.database = 'opex-ro'
+            self.database = 'opex'
             self.project = 'P1'
             self.cache = 'cache'
             self.dbconfig = join(home,'.xnat.cfg')
             self.logs = 'logs'
 
     def loadData(self):
-        output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
-        outputfile = join(self.cache, output)
-        if exists(outputfile):
-            report = OPEXReport(csvfile=outputfile)
-            logging.info("Loading via cache")
-        else:
-            logging.info("Loading from database")
-            configfile = self.dbconfig
-            xnat = XnatConnector(configfile, self.database)
-            try:
-                xnat.connect()
-                if xnat.testconnection():
-                    print "...Connected"
-                    subjects = xnat.get_subjects(self.project)
-                    if (subjects.fetchone() is not None):
-                        report = OPEXReport(subjects)
-                        report.xnat = xnat
-                        headers = ['Group', 'Subject', 'M/F'] + report.exptintervals.keys() + ['Stage']
-                        report.data = xnat.getExpts(self.project, headers)
+        #output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
+        # output = "ExptCounts.csv"
+        # outputfile = join(self.cache, output)
 
-                        active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
-                        subjects = list(active_subjects)
-                        #Parallel processing for getting counts
-                        start = time.time()
-                        logging.info("Starting multiprocessing ..." + str(start))
 
-                        total_tasks = len(subjects)
-                        tasks = []
-                        mm = multiprocessing.Manager()
-                        q = mm.dict()
-                        for i in range(total_tasks):
-                            p = multiprocessing.Process(target=report.processCounts, args=(subjects[i], q))
-                            tasks.append(p)
-                            p.start()
+        # if exists(outputfile):
+        #     report = OPEXReport(csvfile=outputfile)
+        #     logging.info("Loading via cache")
+        # else:
+        #     logging.info("Loading from database")
+        configfile = self.dbconfig
+        xnat = XnatConnector(configfile, self.database)
+        try:
+            xnat.connect()
+            if xnat.testconnection():
+                print "...Connected"
+                output = "ExptCounts.csv"
+                outputfile = join(self.cache, output)
+                if access(outputfile, R_OK):
+                    csv = outputfile
+                else:
+                    csv = None
+                subjects = xnat.getSubjectsDataframe(self.project)
+                msg = "Loaded %d subjects from %s : %s" % (len(subjects), self.database, self.project)
+                logging.info(msg)
+                report = OPEXReport(subjects=subjects,csvfile=csv)
+                report.xnat = xnat
+                # Generate dataframes for display
+                self.df_participants = report.getParticipants()
+                logging.debug('Participants loaded')
+                print self.df_participants
+                self.df_report = report.printMissingExpts(self.project)
+                self.df_report.sort_values(by=['MONTH', 'Subject'], inplace=True, ascending=False)
+                logging.debug("Missing experiments loaded")
+                print self.df_report.head()
+                # Get expts
+                self.df_expts = report.getExptCollection(projectcode=self.project)
+                logging.debug("Experiment collection loaded")
+                print self.df_expts.head()
 
-                        for p in tasks:
-                            p.join()
+        except IOError:
+            logging.error("Connection error - terminating app")
+            print "Connection error - terminating app"
+            sys.exit(1)
+        finally:
+            xnat.conn.disconnect()
 
-                        logging.info("Finished multiprocessing:" +  str(time.time() - start) + 'secs')
-                        headers = ['Group', 'Subject', 'M/F'] + report.exptintervals.keys() + ['Stage']
-                        report.data = pd.DataFrame(q.values(), columns=headers)
-                        report.data.to_csv(outputfile, index=False)  # cache
-                        logging.info("Data saved to cache: " + outputfile)
-            except IOError:
-                logging.error("Connection error - terminating app")
-                print "Connection error - terminating app"
-                sys.exit(1)
-            finally:
-                xnat.conn.disconnect()
 
-        #Generate dataframes for display
-        self.df_participants = report.getParticipants()
-        logging.debug('Participants loaded')
-        print self.df_participants
-        self.df_report = report.printMissingExpts()
-        self.df_report.sort_values(by=['Stage','Subject'], inplace=True, ascending=False)
-        logging.debug("Missing experiments loaded")
-        print self.df_report.head()
-        # Get expts
-        self.df_expts = report.getExptCollection()
-        logging.debug("Experiment collection loaded")
-        print self.df_expts.head()
 
     def colors(self):
         colors = {
@@ -126,17 +113,15 @@ class OPEXReportApp(object):
         return colors
 
     def tablecell(self,val):
-
-        # Sort by hue, saturation, value and name.
-        mycolors = list(sorted(mcolors.CSS4_COLORS.keys()))
-        #mycolors = plt.get_cmap('jet') -> mycolors(0.5)
+        mycolors = list(['#fafad2','#eee8aa','#ffff00','#ffa500','#ff8c00','#ff7f50','#f08080','#ff6347','#ff4500','#ff0000'])
 
         if type(val) != str:
+            val = int(val)
             if val <= 0:
                 return html.Td([html.Span(className="glyphicon glyphicon-ok")],
                                className="btn-success")
             else:
-                valcolor = val+10
+                valcolor = val % len(mycolors)
                 return html.Td([html.Span(val)], style={'color':'black','background-color': mycolors[valcolor]})
         else:
             return html.Td(val)
@@ -188,6 +173,7 @@ class OPEXReportApp(object):
 
         dcc.Graph(
             id='participants',
+            style={'width': '50%', 'float':'left'},
             figure={
                 'data': [
                     {'x': df['Group'], 'y': df['Male'], 'type': 'bar', 'name': 'Male'},
@@ -197,6 +183,7 @@ class OPEXReportApp(object):
                     'barmode':'stack',
                     'plot_bgcolor': colors['background'],
                     'paper_bgcolor': colors['background'],
+                    'title' : 'Participants',
                     'font': {
                         'color': colors['text']
                     }
@@ -206,22 +193,25 @@ class OPEXReportApp(object):
         # Expts stacked bar
         dcc.Graph(
            id='expts',
+           style={'width':'50%', 'float':'left'},
            figure=go.Figure(
                data=[
-                   go.Bar(
-                       text=df_expts['Subject'],
-                       y=df_expts[i],
-                       name=i,
-                   ) for i in df_expts.columns[2:]
+                   go.Pie(
+                       values=df_expts.sum(),
+                       labels=df_expts.columns,
+                   )
 
                ],
                layout=go.Layout(
-                       xaxis={'type': 'linear', 'title': 'Participants'},
-                       yaxis={'title': 'Expts Count'},
-                       margin={'l': 40, 'b': 40, 't': 10, 'r': 10},
-                       legend={'x': 0, 'y': 1},
-                       hovermode='closest'
-                   )
+                       title='Experiments',
+                       yaxis={'title': 'Expts Total'},
+                       margin={'l': 40, 'b': 10, 't': 30, 'r': 10},
+                       #legend={'x': 0, 'y': 1},
+                       hovermode='closest',
+                       font={ 'color': colors['text']},
+                       plot_bgcolor= colors['background'],
+                       paper_bgcolor= colors['background']
+               )
 
            ),
 
@@ -243,16 +233,16 @@ class OPEXReportApp(object):
 #####################################################################
 
 #for wsgi deployment
-#op = OPEXReportApp()
-#server  = op.app.server
-#server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
-#op.loadData()
-#op.app.layout = op.participants_layout()
+op = OPEXReportApp()
+server  = op.app.server
+server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
+op.loadData()
+op.app.layout = op.participants_layout()
 
 
 # for local deployment
 if __name__ == '__main__':
-    op = OPEXReportApp()
-    op.loadData()
-    op.app.layout = op.participants_layout()
+    # op = OPEXReportApp()
+    # op.loadData()
+    # op.app.layout = op.participants_layout()
     op.app.run_server(debug=True, port=8089)

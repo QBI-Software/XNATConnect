@@ -36,17 +36,20 @@ class OPEXReport(object):
         self.data = None
         self.minmth = 0
         self.maxmth = 12
+        self.cache = csvfile
         self.exptintervals = self.__experiments()
-        #self.counts = None
+        if csvfile is not None:
+            self.data = pandas.read_csv(csvfile)
         if subjects is not None:
             self.subjects = subjects
-            self.subjectids = [s.label() for s in subjects]
+            if isinstance(subjects,pandas.DataFrame):
+                self.subjectids = subjects['subject_label']
+            else:
+                self.subjectids = [s.label() for s in subjects]
             print "Subjects loaded from database"
-        elif csvfile is not None:
-            self.data = pandas.read_csv(csvfile)
-            if 'Subject' in self.data:
-                self.subjectids = self.data.Subject.unique()
-                print "Subject IDs loaded from file"
+        elif self.data is not None and 'Subject' in self.data:
+            self.subjectids = self.data.Subject.unique()
+            print "Subject IDs loaded from file"
 
     def __experiments(self):
         """Create list of experiments in set order"""
@@ -99,6 +102,9 @@ class OPEXReport(object):
         if self.data is not None:
             groups = self.data[['Group', 'M/F']]
             groups.columns = ['group', 'gender']
+        elif isinstance(self.subjects, pandas.DataFrame):
+            groups = self.subjects[['sub_group','gender_text']]
+            groups.rename(columns={'sub_group': 'group', 'gender_text': 'gender'}, inplace=True)
         else:
             groups = pandas.DataFrame([(s.attrs.get('group'), s.attrs.get('gender')) for s in self.subjects], columns=['group','gender'])
         #Set up frequency histogram
@@ -117,32 +123,31 @@ class OPEXReport(object):
         df.replace(to_replace=np.nan, value=0, inplace=True)
         return df
 
-    def getExptCollection(self):
+    def getExptCollection(self, projectcode):
         """
         Generate Frequency histogram for expts collected
         :param csvfile:
         :return: sorted counts of each expt per participant
         """
         df = None
-        if self.data is not None:
-            #Area chart or Stacked Bar Chart or Histogram
-            groups = self.data
-        #elif self.counts is not None:
-        #    groups = self.counts
-            #replace NaN with 0
-            groups.fillna(0, inplace=True)
-            #exclude withdrawn
-            df = groups[groups.Group != 'withdrawn']
-            #sort by largest number expts
-            if 'Stage' in df:
-                df = df.sort_values('Stage', ascending=True)
-            else:
-                df = df.sort_values('CANTAB DMS', ascending=True)
-            #plot - exclude Subject, m/f,hand,yob
-            cols = ['Group', 'Subject'] + self.exptintervals.keys()
-            df = df[cols]
-            #test plot
-            #df.plot.area(x='Subject', y=cols[2:])
+        if self.data is None:
+            self.data = self.getExptCounts(projectcode)
+        #Area chart or Stacked Bar Chart or Histogram
+        groups = self.data
+        #replace NaN with 0
+        groups.fillna(0, inplace=True)
+        #exclude withdrawn
+        df = groups[groups.Group != 'withdrawn']
+        #sort by largest number expts
+        if 'MONTH' in df:
+            df = df.sort_values('MONTH', ascending=True)
+        else:
+            df = df.sort_values('CANTAB DMS', ascending=True)
+        #plot - exclude Subject, m/f,hand,yob
+        cols = ['Group', 'Subject'] + self.exptintervals.keys()
+        cols_present = [h for h in cols if h in df.columns]
+        df = df[cols_present]
+
         return df
 
     def processCounts(self,subj,q):
@@ -163,57 +168,56 @@ class OPEXReport(object):
                 else:
                     result.append(0)
 
-            result.append(self.getStage(counts['firstvisit']))
+            result.append(self.getMONTH(counts['firstvisit']))
             q[subj.label()]=result
             #print result
         #print "Counts:", len(self.counts)
         return result
 
-    def getExptCounts(self, projectcode, headers):
+    def getExptCounts(self, projectcode):
+        dfsubjects = None
         if self.xnat is not None:
             df_counts = self.xnat.getOPEXExpts(projectcode)
             # Get first visit as starting point in study
             v0 = df_counts.filter(regex="_visit", axis=1)
-            formatstring = '%Y-%m-%d'
-            v0.apply(lambda d: pandas.to_datetime(d, format=formatstring, errors='coerce'), axis=0)
-            v0.dropna(inplace=True)
-
-            df_counts['first_visit'] = v0.min(skipna=True, axis=0)
-
+            v = v0.replace(np.nan, 'ZZZZZZZ')
+            df_counts['first_visit'] = v.min(axis=1,skipna=True)
             df_counts.replace([np.inf, -np.inf, np.nan], 0, inplace=True)
-            dfsubjects = self.formatCounts(df_counts, headers)
+            dfsubjects = self.formatCounts(df_counts)
+            self.data = dfsubjects
         else:
-            print("Unable to get counts from database")
-            dfsubjects = None
+            print("Load counts from file") #TODO
+
         return dfsubjects
 
-    def formatCounts(self,df_counts, headers=None):
+    def formatCounts(self,df_counts):
         """
         Format counts dataframe with headers in order
         :param df-counts: produced by Xnatconnector.getOPEXExpts
         :return:
         """
-
         if not df_counts.empty:
             print(df_counts.columns)
-            df_counts['Stage'] = df_counts['first_visit'].apply(lambda d: self.getStage(d))
+            df_counts['MONTH'] = df_counts['first_visit'].apply(lambda d: self.getMONTH(d))
             etypes = self._expt_types()
             #rename columns
             df_counts.rename(columns={'sub_group':'Group','subject_label': 'Subject','gender_text':'M/F'}, inplace=True)
             for etype in etypes:
                 df_counts.rename(columns={etypes[etype]: etype},inplace=True)
             #reorder columns
-            if headers is not None:
-                df_counts.columns = headers
-
+            headers = ['MONTH','Subject','Group','M/F'] + self.exptintervals.keys()
+            headers_present = [h for h in headers if h in df_counts.columns]
+            df_counts = df_counts[headers_present]
+            #save to file as cache if db down
+            df_counts.to_csv(self.cache, index=False)
             print df_counts.head()
 
         return df_counts
 
 
-    def getStage(self,vdate, formatstring='%Y-%m-%d'):
+    def getMONTH(self,vdate, formatstring='%Y-%m-%d'):
         """
-        Calculate stage in trial from first visit date
+        Calculate MONTH in trial from first visit date
         :param vdate: datetime.datetime object
         :return: interval as 0,1,2 ...
         """
@@ -228,56 +232,52 @@ class OPEXReport(object):
             months = int(dt.days // 30)
         return months
 
+    def maxValue(self,row):
+        """
+        Function per row - assumes first two are MONTH, Subject
+        :param row:
+        :return: max of values in row
+        """
+        val = row[2:].max()
+        #print "Val=",val
+        #int(max(row.iloc[0, 1:].values)
+        return int(val)
+
+    def calculateMissing(self,row):
+        """
+        Function per row - replace counts with missing
+        :param row:
+        :return:
+        """
+        for hdr in self.exptintervals.keys():
+            #print row
+            if hdr in row:
+                #print "1.",hdr, "=", row[hdr]
+                row[hdr] = len(range(self.minmth, row['MONTH'], self.exptintervals[hdr])) - row[hdr]
+                #print "2.",hdr, "=", row[hdr]
+        return row
+
     def printMissingExpts(self,projectcode=None):
         """
-        Print expt counts with true/false if complete data set for current stage
+        Print expt counts with true/false if complete data set for current MONTH
         :param self:
         :return:
         """
-        headers = ['Subject'] + self.exptintervals.keys()
-        if self.data is None and self.xnat is not None:
-            #Load from database
-            self.data = self.getExptCounts(projectcode, headers)
-        else:
-            # find all experiments
+        data = self.getExptCounts(projectcode)
+        if data is None or data.empty: #use cached data
+            data = self.data
+        #Filter groups
+        if 'Group' in data.columns:
+            data = data[data.Group != 'withdrawn']
+        headers = ['MONTH','Subject'] + self.exptintervals.keys()
+        headers_present = [h for h in headers if h in data.columns]
+        report = data[headers_present]
+        if 'MONTH' not in report:
+            report['MONTH'] = report.apply(self.maxValue,axis=1)
+        report = report.apply(self.calculateMissing,axis=1)
 
-            fdata = self.data[self.data.Group != 'withdrawn']
-            if 'Stage' in fdata:
-                headers.append('Stage')
-            fdata = fdata[headers]
-
-           # elif self.counts is not None:
-            #    fdata = self.counts
-
-            report = fdata.copy()
-            #report['Progress']=''
-            for s in sorted(self.subjectids):
-                print "Subject:", s
-                result = [s]
-                sdata = fdata.query("Subject == '" + s + "'") #find data for this subject
-                if sdata.empty:
-                    continue
-                x = sdata.index.tolist()[0]
-                if 'Stage' in sdata:
-                    smonth = int(list(sdata['Stage'])[0])
-                else:
-                    smonth = int(list(sdata['CANTAB DMS'])[0]) #assume max tests *probably under-estimated
-
-                #sprogress = (100 * smonth/self.maxmth)
-                #print "Progress:", smonth, "month", sprogress, "%"
-                #for each expt - list number collected
-                for e in self.exptintervals.keys():
-                    sd = list(sdata[e])[0]
-                    if (sd is None or np.isnan(sd)):
-                        sd = 0
-                    num_missing = len(range(self.minmth, smonth, self.exptintervals[e])) - sd
-                    result.append(num_missing)
-                result.append(smonth)
-                #result.append(sprogress)
-                report.iloc[x] = result
-
-            print report
-            return report
+        print report
+        return report
 
 
     def getMultivariate(self, expts):
@@ -315,11 +315,11 @@ if __name__ == "__main__":
              ''')
     parser.add_argument('database', action='store', help='select database config from xnat.cfg to connect to')
     parser.add_argument('projectcode', action='store', help='select project by code')
-    parser.add_argument('--testfile', action='store', help='use a downloaded csv file - no connection')
+    parser.add_argument('--cache', action='store', help='use a downloaded csv file - no connection')
     args = parser.parse_args()
-    if (args.testfile is not None):
+    if (args.cache is not None):
         try:
-            op = OPEXReport(csvfile=args.testfile)
+            op = OPEXReport(csvfile=args.cache)
             # print "****Participant groups****"
             # df = op.getParticipants()
             # print df
@@ -343,9 +343,9 @@ if __name__ == "__main__":
         xnat.connect()
         try:
             print "...Connected"
-            proj = xnat.get_project(projectcode)
-            subjects = xnat.get_subjects(projectcode)
-            msg = "Loaded %d subjects from %s" % (len(subjects.fetchall()), proj.id())
+            #proj = xnat.get_project(projectcode)
+            subjects = xnat.getSubjectsDataframe(projectcode)
+            msg = "Loaded %d subjects from %s : %s" % (len(subjects), database, projectcode)
             print msg
             op = OPEXReport(subjects=subjects)
             op.xnat = xnat
@@ -353,7 +353,7 @@ if __name__ == "__main__":
             print df
             op.printMissingExpts(projectcode)
 
-            #NO MULTIPROCESSING REQUIRED
+            # MULTIPROCESSING REQUIRED
             #
             # print("There are %d CPUs on this machine" % multiprocessing.cpu_count())
             # active_subjects = [s for s in subjects if s.attrs.get('group') != 'withdrawn']
@@ -375,7 +375,7 @@ if __name__ == "__main__":
 
 
             # print "*****All Counts:******"
-            # headers = ['Group','Subject', 'M/F'] + op.exptintervals.keys() + ['Stage']
+            # headers = ['Group','Subject', 'M/F'] + op.exptintervals.keys() + ['MONTH']
             # print q.values()
             # op.counts = pandas.DataFrame(q.values(), columns=headers)
             # print op.counts
