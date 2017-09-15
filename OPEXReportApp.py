@@ -144,6 +144,9 @@ class OPEXReportApp(object):
                 })
 
     def participants_layout(self):
+        logging.info("Loading data from db")
+        self.loadData()
+        logging.info("Data loaded - rendering")
         df = self.df_participants
         df_expts = self.df_expts
         df_report = self.df_report
@@ -236,7 +239,7 @@ class OPEXReportApp(object):
 op = OPEXReportApp()
 server  = op.app.server
 server.secret_key = environ.get('SECRET_KEY', 'my-secret-key')
-op.loadData()
+#op.loadData()
 op.app.layout = op.participants_layout()
 
 

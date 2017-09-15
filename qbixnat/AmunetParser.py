@@ -55,7 +55,7 @@ class AmunetParser(DataParser):
                 interval = 0
         else:
             interval = 0
-
+        visitdate = self.getVisitDate(row)
 
         mandata = {
             xsd + '/interval': str(interval),
@@ -63,6 +63,8 @@ class AmunetParser(DataParser):
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/data_valid': 'Initial'
         }
+        if (visitdate is not None):
+            mandata[xsd + '/date'] = visitdate
         return mandata
 
     def getVisitDate(self,row):
@@ -78,9 +80,9 @@ class AmunetParser(DataParser):
                 visitdate = int(row['Date'])
                 visitdate = self.formatDobNumber(visitdate)
             except:
-                visitdate = row['Date'].replace("-",".")
-                visitdate = visitdate + " 00:00:00"
-        #print "Visit date=", visitdate
+                visitdate = row['Date'] #.replace("-",".")
+                #visitdate = visitdate + " 00:00:00"
+        print "Visit date=", visitdate
         return visitdate
 
     def mapAEVdata(self, row,i):
@@ -91,7 +93,7 @@ class AmunetParser(DataParser):
         """
         xsd = self.getxsd()
         mandata = self.mapMandata(xsd, row, i)
-        visitdate = self.getVisitDate(row)
+        #visitdate = self.getVisitDate(row)
 
         data = {
             xsd + '/AEVcomments': str(row['AEV_Lexical rating']),
@@ -101,8 +103,7 @@ class AmunetParser(DataParser):
             xsd + '/DV': str(row['DV_Average total error'])
 
         }
-        if (visitdate is not None):
-            data[xsd + '/date'] = visitdate
+
 
         return (mandata,data)
 
@@ -115,7 +116,7 @@ class AmunetParser(DataParser):
         """
         xsd = self.getxsd()
         mandata = self.mapMandata(xsd, row, i)
-        visitdate = self.getVisitDate(row)
+        #visitdate = self.getVisitDate(row)
         data = {
             xsd + '/SCScomments': str(row['SCS_Lexical rating']),
             xsd + '/SCS': str(row['SCS_Average total error']),
@@ -125,8 +126,8 @@ class AmunetParser(DataParser):
             xsd + '/SES': str(row['SES_Average total error']),
             xsd + '/SED': str(row['SED_Average total error'])
         }
-        if (visitdate is not None):
-            data[xsd + '/date'] = visitdate
+        # if (visitdate is not None):
+        #     data[xsd + '/date'] = visitdate
         return (mandata, data)
 
     def getSubjectData(self,sd):
