@@ -56,7 +56,7 @@ class OPEXReportApp(object):
             self.logs = 'logs'
 
     def loadData(self):
-        #output = "ExptCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
+        output = "RefreshCounts_%s.csv" % datetime.today().strftime("%Y%m%d")
         # output = "ExptCounts.csv"
         # outputfile = join(self.cache, output)
 
@@ -86,15 +86,15 @@ class OPEXReportApp(object):
                 # Generate dataframes for display
                 self.df_participants = report.getParticipants()
                 logging.debug('Participants loaded')
-                print self.df_participants
+                #print self.df_participants
                 self.df_report = report.printMissingExpts(self.project)
                 self.df_report.sort_values(by=['MONTH', 'Subject'], inplace=True, ascending=False)
                 logging.debug("Missing experiments loaded")
-                print self.df_report.head()
+                #print self.df_report.head()
                 # Get expts
                 self.df_expts = report.getExptCollection(projectcode=self.project)
                 logging.debug("Experiment collection loaded")
-                print self.df_expts.head()
+                #print self.df_expts.head()
 
         except IOError:
             logging.error("Connection error - terminating app")

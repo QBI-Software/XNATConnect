@@ -197,7 +197,7 @@ class OPEXReport(object):
         :return:
         """
         if not df_counts.empty:
-            print(df_counts.columns)
+            #print(df_counts.columns)
             df_counts['MONTH'] = df_counts['first_visit'].apply(lambda d: self.getMONTH(d))
             etypes = self._expt_types()
             #rename columns
@@ -210,7 +210,7 @@ class OPEXReport(object):
             df_counts = df_counts[headers_present]
             #save to file as cache if db down
             df_counts.to_csv(self.cache, index=False)
-            print df_counts.head()
+            #print df_counts.head()
 
         return df_counts
 
@@ -276,7 +276,7 @@ class OPEXReport(object):
             report['MONTH'] = report.apply(self.maxValue,axis=1)
         report = report.apply(self.calculateMissing,axis=1)
 
-        print report
+        #print report
         return report
 
 
