@@ -11,17 +11,18 @@ Created on Thu Mar 2 2017
 """
 
 import argparse
+import csv
 import fnmatch
 import glob
 import re
 import sys
-import csv
-import pandas
-from datetime import datetime, date
+from datetime import date
 from os import listdir, R_OK, access
 from os.path import join, isfile
 
-from qbixnat.DataParser import DataParser
+import pandas
+
+from qbixnat.dataparser.DataParser import DataParser
 
 
 class AmunetParser(DataParser):

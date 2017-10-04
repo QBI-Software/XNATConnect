@@ -1,22 +1,25 @@
 import argparse
+import csv
 import glob
 import logging
 import os
-import sys
-import csv
 import re
-import numpy as np
-import pandas
+import sys
+from datetime import date
 from os import R_OK, access
 from os.path import expanduser
 from os.path import isdir, join
-from datetime import datetime, date
+
+import numpy as np
+import pandas
+from qbixnat.dataparser.AmunetParser import AmunetParser
+from qbixnat.dataparser.CantabParser import CantabParser
+from qbixnat.dataparser.MridataParser import MridataParser
+from qbixnat.dataparser.BloodParser import BloodParser
 from requests.exceptions import ConnectionError
-from qbixnat.CantabParser import CantabParser
-from qbixnat.AmunetParser import AmunetParser
-from qbixnat.AcerParser import AcerParser
-from qbixnat.MridataParser import MridataParser
+
 from qbixnat.XnatConnector import XnatConnector
+from qbixnat.dataparser.AcerParser import AcerParser
 
 
 class OPEXUploader():
@@ -289,6 +292,7 @@ if __name__ == "__main__":
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
     parser.add_argument('--amunetdates',action='store', help='Extract date info from orig files in this dir')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
+    parser.add_argument('--blood', action='store', help='Upload BLOOD data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
     parser.add_argument('--mridata', action='store', help='Upload MRI data from directory - detects ASHS or FreeSurf from filename')
     parser.add_argument('--mri', action='store',
@@ -474,6 +478,39 @@ if __name__ == "__main__":
                         raise ValueError(e)
                 else:
                     raise IOError("Input dir error")
+
+            # Upload BLOOD data from directory
+            if (uploader.args.blood is not None and uploader.args.blood):
+                sheet = 1
+                skip = 1
+                inputdir = uploader.args.blood
+                #assume dir is type eg COBAS to match
+                parts = os.path.split(inputdir)
+                type = parts[1]
+                print("Input:", inputdir)
+                if access(inputdir, R_OK):
+                    seriespattern = '*.xlsx'
+                    try:
+                        files = glob.glob(join(inputdir, seriespattern))
+                        print("Files:", len(files))
+                        for f2 in files:
+                            print "\n****Loading", f2
+                            dp = BloodParser(f2, sheet, skip)
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
+                                                                     f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                print(msg)
+                                logging.info(msg)
+                    except:
+                        e = sys.exc_info()[0]
+                        raise ValueError(e)
+                else:
+                    raise IOError("Input dir error")
+
+
 
         else:
             raise ConnectionError("Connection failed - check config")

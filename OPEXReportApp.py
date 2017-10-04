@@ -1,21 +1,17 @@
+import logging
+import sys
+from datetime import datetime
+from os import environ, access, R_OK
+from os.path import expanduser, join
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
-import pandas as pd
-from os.path import expanduser, join, exists
-from qbixnat.XnatConnector import XnatConnector  # Only for testing
-from qbixnat.OPEXReport import OPEXReport
-import time
-import multiprocessing
-from datetime import datetime
-from matplotlib import colors as mcolors
-import matplotlib.pyplot as plt
-import pandas as pd
-from os import environ,access,R_OK
 from configobj import ConfigObj
-import logging
-import sys
+
+from qbixnat.XnatConnector import XnatConnector  # Only for testing
+from qbixnat.report.OPEXReport import OPEXReport
 
 """ 
 OPEX Report DASHBOARD via DASH

@@ -12,14 +12,13 @@ Created on Thu Mar 2 2017
 
 import argparse
 import glob
-import re
-import shutil
 from datetime import datetime
-from os import listdir, R_OK, path, mkdir, access, error
-from os.path import isdir, join, basename, splitext
-from qbixnat.DataParser import DataParser
+from os import R_OK, access
+from os.path import join
 
 import pandas
+
+from qbixnat.dataparser.DataParser import DataParser
 
 
 class MridataParser(DataParser):

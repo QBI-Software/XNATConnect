@@ -15,7 +15,7 @@ import glob
 from os import R_OK, access
 from os.path import join
 
-from qbixnat.DataParser import DataParser
+from qbixnat.dataparser.DataParser import DataParser
 
 
 class AcerParser(DataParser):
