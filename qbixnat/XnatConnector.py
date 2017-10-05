@@ -188,11 +188,28 @@ class XnatConnector:
         return label
 
     def changeExptLabel(self,projectcode, oldlabel, newlabel):
+        """
+        Change label for an experiment - currently OPEX
+        NOTE: Need to Load mandatory fields and subject ID
+        Alternatively works on spreadsheet upload with these fields selected
+        :param projectcode:
+        :param oldlabel:
+        :param newlabel:
+        :return:
+        """
         project = self.get_project(projectcode)
         expt = project.experiment(oldlabel)
         if expt.exists():
+            xsd = expt.datatype()
+            mandata = {
+                xsd + '/label': newlabel,
+                xsd + '/interval': expt.attrs.get(xsd + '/interval'),
+                xsd + '/sample_quality': expt.attrs.get(xsd + '/sample_quality'),
+                xsd + '/data_valid': expt.attrs.get(xsd + '/data_valid'),
+                'subject_ID':expt.attrs.get('subject_ID')
+            }
             print "Old:", expt.label()
-            expt.attrs.set('label', newlabel)
+            expt.attrs.mset(mandata)
             print "New:", expt.label()
         else:
             print("No expts found with label=", oldlabel)
