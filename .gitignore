@@ -52,6 +52,5 @@ Temporary Items
 *.xml
 *.pyc
 *.log
-*.csv
 *.SR
 *.xlsx
