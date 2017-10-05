@@ -25,15 +25,15 @@ class MridataParser(DataParser):
     def __init__(self, fields, *args):
         DataParser.__init__(self, *args)
         if 'ASHS' in self.datafile:
-            self.mritype = 'ASHS'
+            self.type = 'ASHS'
         elif 'FreeSurf' in self.datafile:
-            self.mritype = 'FS'
+            self.type = 'FS'
         else:
             raise ValueError("Cannot determine MRI type")
         try:
             access(fields, R_OK)
             df = pandas.read_csv(fields, header=0)
-            self.cantabfields = df[self.mritype]
+            self.cantabfields = df[self.type]
         except:
             raise ValueError("Cannot access fields")
 

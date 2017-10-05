@@ -62,6 +62,9 @@ class OPEXReport(object):
                   ('IPAQ', 3),
                   ('Insomnia', 3),
                   ('Godin', 3),
+                  ('COBAS', 1),
+                  ('ELISAS', 1),
+                  ('MULTIPLEX', 1),
                   ('MR Sessions', 6),
                   ('MRI ASHS', 6),
                   ('MRI FreeSurfer', 6)]
@@ -83,6 +86,9 @@ class OPEXReport(object):
                   ('IPAQ', 'opex:ipaq'),
                   ('Insomnia', 'opex:insomnia'),
                   ('Godin', 'opex:godin'),
+                  ('COBAS', 'opex:bloodCobasData'),
+                  ('ELISAS', 'opex:bloodElisasData'),
+                  ('MULTIPLEX', 'opex:bloodMultiplexData'),
                   ('MR Sessions', 'xnat:mrSessionData'),
                   ('MRI ASHS', 'opex:mriashs'),
                   ('MRI FreeSurfer', 'opex:mrifs')]
@@ -271,7 +277,8 @@ class OPEXReport(object):
         if 'MONTH' not in report:
             report['MONTH'] = report.apply(self.maxValue, axis=1)
         report = report.apply(self.calculateMissing, axis=1)
-
+        #Only one CANTAB
+        report = report.drop(['CANTAB ERT','CANTAB MOT','CANTAB PAL', 'CANTAB SWM'], axis=1)
         # print report
         return report
 

@@ -15,6 +15,8 @@ import glob
 from os import R_OK, access
 from os.path import join
 from datetime import datetime
+import pandas
+import numpy as np
 
 from qbixnat.dataparser.DataParser import DataParser
 
@@ -26,6 +28,17 @@ class BloodParser(DataParser):
         self.type=''
         if 'type' in kwargs:
             self.type = kwargs.get('type')
+        if 'fields' in kwargs:
+            fields = kwargs.get('fields')
+        else:
+            fields = 'resources/blood_fields.csv'
+        try:
+            access(fields, R_OK)
+            df = pandas.read_csv(fields, header=0)
+            self.fields = df[self.type]
+            self.fields.dropna(inplace=True)
+        except:
+            raise ValueError("Cannot access fields")
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -70,47 +83,56 @@ class BloodParser(DataParser):
         """
         if 'Sample ID' in row:
             parts = row['Sample ID'].split("-")
-            id = "%s_%s_%d_%d" % (self.type, sd, int(parts[0]), int(parts[1]))
+            id = "%s_%dm_%s_%s" % (sd, int(parts[0]), self.getPrepostOptions(int(parts[1])), row['R_No.'])
         else:
-            id = sd
+            raise ValueError("Sample ID column missing")
         return id
 
     def formatADate(self, orig):
         """
-        Formats date from input as dd/mm/yyyy hh:mm
+        Formats date from input as dd/mm/yyyy hh:mm:ss
         :param orig:
         :return:
         """
-        if "/" in orig:
+        if isinstance(orig, pandas.tslib.Timestamp):
+            dt = orig
+        elif "/" in orig:
             dt = datetime.strptime(orig, "%d/%m/%Y %H:%M:%S")
         elif "-" in orig:
             dt = datetime.strptime(orig, "%Y-%m-%d %H:%M:%S")
         else:
             dt = orig
-        return dt.strftime("%Y-%m-%d")
+        return dt.strftime("%Y.%m.%d %H:%M:%S")
 
-    def mapData(self, row, i, type):
+    def mapData(self, row, i, xsd=None):
         """
         Maps required fields from input rows
         :param row:
         :return:
         """
         (interval,prepost) = self.parseSampleID(row['Sample ID'])
-        xsd = self.getxsd()[type]
+        if xsd is None:
+            xsd = self.getxsd()[self.type]
         mandata = {
             xsd + '/interval': str(interval),
             xsd + '/sample_id': row['Sample ID'],  # row number in this data file for reference
             xsd + '/sample_quality': 'Unknown',  # default - check later if an error
             xsd + '/data_valid': 'Initial',
-            xsd + '/date' : row['A_Date'],
+            xsd + '/date' : self.formatADate(row['A_Date']),
+            xsd + '/comments' : 'Date analysed not collected',
             xsd + '/prepost': prepost,
-            xsd + '/HGH': str(row['HGH']),
-            xsd + '/Prolactin': str(row['Prolactin']),
-            xsd + '/Cortisol': str(row['Cortisol']),
-            xsd + '/Insulin': str(row['Insulin'])
-        }
+            xsd + '/sample_num' : str(row['R_No.'])
 
+        }
+        #Different fields for different bloods
         data = {}
+        for ctab in self.fields:
+            if ctab in row:
+                data[xsd + '/' + ctab] = str(row[ctab])
+        # data = { xsd + '/HGH': str(row['HGH']),
+        #     xsd + '/Prolactin': str(row['Prolactin']),
+        #     xsd + '/Cortisol': str(row['Cortisol']),
+        #     xsd + '/Insulin': str(row['Insulin'])}
         return (mandata,data)
 
 
@@ -143,17 +165,18 @@ if __name__ == "__main__":
             print("Files:", len(files))
             for f2 in files:
                 print "\n****Loading",f2
-                cantab = BloodParser(f2,sheet,skip, type=type)
-                cantab.sortSubjects()
+                dp = BloodParser(f2,sheet,skip, type=type)
+                dp.sortSubjects()
 
-                for sd in cantab.subjects:
+                for sd in dp.subjects:
                     print 'ID:', sd
-                    for i, row in cantab.subjects[sd].iterrows():
-                        dob = cantab.formatADate(str(cantab.subjects[sd]['A_Date'][i]))
-                        uid = cantab.getSampleid(sd,row)
+                    for i, row in dp.subjects[sd].iterrows():
+                        dob = dp.formatADate(str(dp.subjects[sd]['A_Date'][i]))
+                        uid = dp.type + "_" + dp.getSampleid(sd,row)
                         print i, 'Visit:', uid, 'DOB', dob
-                        (d1,d2) = cantab.mapData(row,i,type)
+                        (d1,d2) = dp.mapData(row,i)
                         print d1
+                        print d2
 
 
 

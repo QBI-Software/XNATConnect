@@ -160,10 +160,10 @@ class OPEXUploader():
                         msg = self.loadAMUNETdata(sampleid, i, row, s, dp)
                         logging.info(msg)
                         print(msg)
-                    elif ('FS' in xsdtypes):
-                        xsd = dp.getxsd()[dp.mritype]
+                    elif ('FS' in xsdtypes or 'COBAS' in xsdtypes):
+                        xsd = dp.getxsd()[dp.type]
                         (mandata, data) = dp.mapData(row, i, xsd)
-                        msg = self.loadSampledata(s, xsd, dp.mritype + "_" + sampleid, mandata, data)
+                        msg = self.loadSampledata(s, xsd, dp.type + "_" + sampleid, mandata, data)
                         logging.info(msg)
                         print(msg)
                     else: #cantab and ACER
@@ -493,9 +493,10 @@ if __name__ == "__main__":
                     try:
                         files = glob.glob(join(inputdir, seriespattern))
                         print("Files:", len(files))
+                        project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             print "\n****Loading", f2
-                            dp = BloodParser(f2, sheet, skip)
+                            dp = BloodParser(f2, sheet, skip, type=type)
                             (missing, matches) = uploader.uploadData(project, dp)
                             # Output matches and missing
                             if len(matches) > 0 or len(missing) > 0:

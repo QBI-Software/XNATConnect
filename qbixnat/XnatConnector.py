@@ -495,8 +495,10 @@ if __name__ == "__main__":
             if (args.m is not None and args.m):
                 etypes = sorted(xnat.conn.inspect.datatypes())
                 print(etypes)
-                for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
-                    xnat.delete_experiments(projectcode,dtype,{'status': 'COMPLETED'}) # 'status': 'SYSTEM_ERROR'
+                for dtype in ['opex:bloodCobasData']:
+                    xnat.delete_experiments(projectcode,dtype,{'sample_quality':'UNKNOWN'}) # 'status': 'SYSTEM_ERROR'
+                # for dtype in ['opex:cantabDMS','opex:cantabERT','opex:cantabMOT','opex:cantabPAL','opex:cantabSWM']:
+                #     xnat.delete_experiments(projectcode,dtype,{'status': 'COMPLETED'}) # 'status': 'SYSTEM_ERROR'
         except ValueError as e:
             print "Error:", e
 

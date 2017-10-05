@@ -36,6 +36,7 @@ class OPEXUploaderGUI(wx.Frame):
                            'CANTAB': '--cantab' ,
                            'AMUNET': '--amunet',
                            'ACE-R': '--acer',
+                           'BLOOD': '--blood',
                            'MRIscans': '--mri',
                            'ASHS and Freesurfer': '--mridata'}
         self.runoptionslabel = wx.StaticText(self.panel, label="Select option : ", pos=(pos_x[0], pos_y))
