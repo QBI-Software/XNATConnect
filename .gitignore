@@ -54,3 +54,6 @@ Temporary Items
 *.log
 *.SR
 *.xlsx
+cache/*
+sampledata/*
+*.py~
