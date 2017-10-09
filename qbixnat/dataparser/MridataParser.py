@@ -20,7 +20,7 @@ import pandas
 
 from qbixnat.dataparser.DataParser import DataParser
 
-
+VERBOSE = 0
 class MridataParser(DataParser):
     def __init__(self, fields, *args):
         DataParser.__init__(self, *args)
@@ -44,7 +44,8 @@ class MridataParser(DataParser):
             ids = self.data['Subject'].unique()
             for sid in ids:
                 self.subjects[sid] = self.data[self.data['Subject'] == sid]
-                print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
+                if VERBOSE:
+                    print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
     def formatDateString(self, orig):

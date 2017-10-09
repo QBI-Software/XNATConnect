@@ -284,8 +284,7 @@ if __name__ == "__main__":
     parser.add_argument('--subjects', action='store_true', help='list subjects')
     parser.add_argument('--config', action='store', help='database configuration file (overrides ~/.xnat.cfg)')
     parser.add_argument('--cantab', action='store', help='Upload CANTAB data from directory')
-    parser.add_argument('--fields', action='store', help='CANTAB or MRI fields to extract',
-                        default="cantab_fields.csv")
+    parser.add_argument('--fields', action='store', help='CANTAB or MRI fields to extract')
     parser.add_argument('--checks', action='store_true', help='Test run with output to files')
     parser.add_argument('--update', action='store_true', help='Also update existing data')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
@@ -345,7 +344,11 @@ if __name__ == "__main__":
             if (uploader.args.cantab is not None and uploader.args.cantab):
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
-                cantabfields = os.path.join("resources",uploader.args.fields)
+                fields = uploader.args.fields
+                if fields is None or len(fields) <=0:
+                    fields = 'cantab_fields.csv'
+
+                cantabfields = os.path.join("resources",fields)
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
                     seriespattern = '*.csv'
@@ -453,8 +456,11 @@ if __name__ == "__main__":
             if (uploader.args.mridata is not None and uploader.args.mridata):
                 sheet = "1"
                 inputdir = uploader.args.mridata
-                mrifields = os.path.join("resources", uploader.args.fields)
-                print("Input:", inputdir)
+                if uploader.args.fields is not None:
+                    mrifields = os.path.join("resources", uploader.args.fields)
+                else:
+                    mrifields = os.path.join("resources", "MRI_fields.csv")
+                print "MRIdata Input: %s" % inputdir
                 if access(inputdir, R_OK):
                     seriespattern = '*.csv'
                     try:
@@ -462,7 +468,7 @@ if __name__ == "__main__":
                         print("Files:", len(files))
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
-                            print("Loading", f2)
+                            print("Loading", f2, "with fields: ", mrifields)
                             dp = MridataParser(mrifields,f2, sheet)
                             (missing, matches) = uploader.uploadData(project, dp)
                             # Output matches and missing
@@ -481,7 +487,7 @@ if __name__ == "__main__":
 
             # Upload BLOOD data from directory
             if (uploader.args.blood is not None and uploader.args.blood):
-                sheet = 1
+                sheet = 0
                 skip = 1
                 inputdir = uploader.args.blood
                 #assume dir is type eg COBAS to match

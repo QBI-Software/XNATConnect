@@ -26,7 +26,7 @@ from configobj import ConfigObj
 
 warnings.filterwarnings("ignore")
 DEBUG = 1
-
+VERBOSE = 0
 
 class XnatConnector:
     def __init__(self, configfile, sitename):
@@ -94,7 +94,8 @@ class XnatConnector:
             mywriter = csv.DictWriter(csvfile, fieldnames=fieldnames)
             mywriter.writeheader()
             for s in subj:
-                print "ID=", s.label(), ", SubjectID=", s.id() # xnat subject id eg XNAT_S00006
+                if VERBOSE:
+                    print "ID=", s.label(), ", SubjectID=", s.id() # xnat subject id eg XNAT_S00006
                 #ID	group	label	dob	gender	handedness	education
                 mywriter.writerow({'ID': s.label(),
                                    'group': s.attrs.get('group'),

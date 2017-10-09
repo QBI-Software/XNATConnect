@@ -24,7 +24,7 @@ import pandas
 
 from qbixnat.dataparser.DataParser import DataParser
 
-
+VERBOSE = 0
 class AmunetParser(DataParser):
 
     def __init__(self, *args):
@@ -39,7 +39,8 @@ class AmunetParser(DataParser):
             ids = self.data['S_Full name'].unique()
             for sid in ids:
                 self.subjects[sid] = self.data[self.data['S_Full name'] == sid]
-                print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
+                if VERBOSE:
+                    print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
     def getxsd(self):

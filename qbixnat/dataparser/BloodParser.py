@@ -20,7 +20,7 @@ import numpy as np
 
 from qbixnat.dataparser.DataParser import DataParser
 
-
+VERBOSE = 0
 class BloodParser(DataParser):
 
     def __init__(self, *args, **kwargs):
@@ -48,7 +48,8 @@ class BloodParser(DataParser):
             ids = self.data['Participant ID'].unique()
             for sid in ids:
                 self.subjects[sid] = self.data[self.data['Participant ID'] == sid]
-                print 'Subject:', sid, 'with datasets=', len(self.subjects[sid])
+                if VERBOSE:
+                    print 'Subject:', sid, 'with datasets=', len(self.subjects[sid])
             print 'TOTAL Subjects loaded=', len(self.subjects)
 
     def getxsd(self):
@@ -149,7 +150,7 @@ if __name__ == "__main__":
              ''')
 
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="sampledata\\blood\\COBAS")
-    parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="1")
+    parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="0")
     args = parser.parse_args()
 
     inputdir = args.filedir

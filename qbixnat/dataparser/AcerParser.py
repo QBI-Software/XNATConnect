@@ -17,7 +17,7 @@ from os.path import join
 
 from qbixnat.dataparser.DataParser import DataParser
 
-
+VERBOSE = 0
 class AcerParser(DataParser):
 
     def __init__(self, *args):
@@ -30,7 +30,8 @@ class AcerParser(DataParser):
             ids = self.data['ID'].unique()
             for sid in ids:
                 self.subjects[sid] = self.data[self.data['ID'] == sid]
-                print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
+                if VERBOSE:
+                    print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
     def getxsd(self):

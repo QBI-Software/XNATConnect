@@ -20,7 +20,7 @@ import pandas
 
 from qbixnat.dataparser.DataParser import DataParser
 
-
+VERBOSE = 0
 class CantabParser(DataParser):
 
     def __init__(self, fields,*args):
@@ -29,9 +29,19 @@ class CantabParser(DataParser):
         try:
             access(fields, R_OK)
             self.cantabfields = pandas.read_csv(fields, header=0)
+            self.incorrect = pandas.read_csv(join('sampledata', 'incorrectIds.csv'))
         except:
             raise error
 
+    def __checkSID(self,sid):
+        rsid = sid
+        if not self.incorrect.empty:
+            r = self.incorrect[self.incorrect.INCORRECT == sid]
+            if not r.empty:
+                rsid = r.CORRECT.values[0]
+                msg ='Subject: %s corrected to %s' % (sid,rsid)
+                print(msg)
+        return rsid
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -39,8 +49,10 @@ class CantabParser(DataParser):
         if self.data is not None:
             ids = self.data['Participant ID'].unique()
             for sid in ids:
-                self.subjects[sid] = self.data[self.data['Participant ID'] == sid]
-                print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
+                sidkey = self.__checkSID(sid)
+                self.subjects[sidkey] = self.data[self.data['Participant ID'] == sid]
+                if VERBOSE:
+                    print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
 
     def formatDateString(self,orig):
@@ -163,8 +175,6 @@ class CantabParser(DataParser):
                                     columns=['Interval', 'Valid', 'Quality', 'expt'])
         df = df_expts[(df_expts.Valid != "Invalid") & (df_expts.Quality != "Poor") & (df_expts.Interval == interval)]
         #generate columns with fields
-        ##TODO: This is too slow and cumbersome - maybe parse xml and load per row not per column
-        #see http://www.austintaylor.io/lxml/python/pandas/xml/dataframe/2016/07/08/convert-xml-to-pandas-dataframe/
         for field in self.cantabfields[prefix].dropna():
             fieldvals = []
             print("loading field=", field)
