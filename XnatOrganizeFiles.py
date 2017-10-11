@@ -98,8 +98,9 @@ if __name__ == "__main__":
                     for f2 in files:
                         shutil.copy(f2, dpath[0])
                 except:
-                    print "Error copying files"
-                    raise OSError
+                    print "Error copying files: ", dpath
+                    break
+                    #raise OSError
 
             series={}
 
