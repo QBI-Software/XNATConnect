@@ -331,7 +331,7 @@ if __name__ == "__main__":
                 uploaddir = uploader.args.mri  # Top level DIR FOR SCANS
                 # Directory structure data/subject_label/scans/session_id/*.dcm
                 if isdir(uploaddir):
-                    fid = uploader.xnat.upload_MRIscans(projectcode, uploaddir)
+                    fid = uploader.xnat.upload_MRIscans(projectcode, uploaddir, opexid=True)
                     if fid == 0:
                         msg = 'Upload not successful - 0 sessions uploaded'
                         raise ValueError(msg)

@@ -266,7 +266,7 @@ class XnatConnector:
         return df_subjects
 
 
-    def upload_MRIscans(self, projectcode, scandir):
+    def upload_MRIscans(self, projectcode, scandir, opexid=False):
         """
         Upload MRI scans from scandir to project
         :param projectcode: XNAT ID for project eg QBICC
@@ -285,6 +285,7 @@ class XnatConnector:
         scanfiles = [f for f in listdir(scandir) if os.path.isdir(join(scandir, f))]
         if scanfiles:
             dirpath = os.path.dirname(scandir)
+            #opex
             visitid = scandir.rsplit('_', 1)
             if len(visitid) > 1:
                 m = re.match('(\d){1,2}[mM]?$', visitid[1])
@@ -299,8 +300,13 @@ class XnatConnector:
                     raise OSError
 
         for slabel in scanfiles:
-            sid = self.get_subjectid_bylabel(projectcode, slabel)
+            if opexid and len(slabel) > 6:
+                # try to extract slabel eg 1006JJ06
+                sid = self.get_subjectid_bylabel(projectcode, slabel[0:6])
+            else:
+                sid = self.get_subjectid_bylabel(projectcode, slabel)
             if sid is None:
+
                 logging.warning("Subject doesn't exist - skipping %s", slabel)
                 continue
             s = project.subject(sid)
