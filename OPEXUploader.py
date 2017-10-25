@@ -224,11 +224,12 @@ class OPEXUploader():
                 else:
                     guess="Possible ID: " + ",".join(guess)
                 spamwriter.writerow([m['ID'], guess])
-                for i, row in m['rows'].iterrows():
-                    if ('Row Number' in row):
-                        spamwriter.writerow(["Row:", row['Row Number']])
-                    else:
-                        spamwriter.writerow(["Row:", i])
+                if not isinstance(m['rows'],dict):
+                    for i, row in m['rows'].iterrows():
+                        if ('Row Number' in row):
+                            spamwriter.writerow(["Row:", row['Row Number']])
+                        else:
+                            spamwriter.writerow(["Row:", i])
 
         if self.args.checks is not None and self.args.checks:
             msg = "*******TEST RUN ONLY*******\n"
