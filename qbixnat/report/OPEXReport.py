@@ -49,14 +49,14 @@ class OPEXReport(object):
 
     def __experiments(self):
         """Create list of experiments in set order"""
-        fields = [('Health screening', 3),
+        fields = [('Health', 3),
                   ('ACER', 6),
                   ('CANTAB DMS', 1),
                   ('CANTAB ERT', 1),
                   ('CANTAB MOT', 1),
                   ('CANTAB PAL', 1),
                   ('CANTAB SWM', 1),
-                  ('Virtual Water Maze', 3),
+                  ('VWM', 3),
                   ('PSQI', 3),
                   ('DASS', 3),
                   ('IPAQ', 3),
@@ -67,20 +67,21 @@ class OPEXReport(object):
                   ('MULTIPLEX', 1),
                   ('MR Sessions', 6),
                   ('MRI ASHS', 6),
-                  ('MRI FreeSurfer', 6)]
+                  ('MRI FS', 6),
+                  ('DEXA',3)]
         od = OrderedDict(fields)
         return od
 
     def _expt_types(self):
         """Create list of experiments in set order"""
-        fields = [('Health screening', 'opex:health'),
+        fields = [('Health', 'opex:health'),
                   ('ACER', 'opex:acer'),
                   ('CANTAB DMS', 'opex:cantabDMS'),
                   ('CANTAB ERT', 'opex:cantabERT'),
                   ('CANTAB MOT', 'opex:cantabMOT'),
                   ('CANTAB PAL', 'opex:cantabPAL'),
                   ('CANTAB SWM', 'opex:cantabSWM'),
-                  ('Virtual Water Maze', 'opex:amunet'),
+                  ('VWM', 'opex:amunet'),
                   ('PSQI', 'opex:psqi'),
                   ('DASS', 'opex:dass'),
                   ('IPAQ', 'opex:ipaq'),
@@ -91,7 +92,8 @@ class OPEXReport(object):
                   ('MULTIPLEX', 'opex:bloodMultiplexData'),
                   ('MR Sessions', 'xnat:mrSessionData'),
                   ('MRI ASHS', 'opex:mriashs'),
-                  ('MRI FreeSurfer', 'opex:mrifs')]
+                  ('MRI FS', 'opex:mrifs'),
+                  ('DEXA','opex:dexa')]
         od = OrderedDict(fields)
         return od
 

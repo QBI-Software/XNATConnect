@@ -12,14 +12,15 @@ from os.path import isdir, join
 
 import numpy as np
 import pandas
-from qbixnat.dataparser.AmunetParser import AmunetParser
-from qbixnat.dataparser.CantabParser import CantabParser
-from qbixnat.dataparser.MridataParser import MridataParser
-from qbixnat.dataparser.BloodParser import BloodParser
 from requests.exceptions import ConnectionError
 
 from qbixnat.XnatConnector import XnatConnector
 from qbixnat.dataparser.AcerParser import AcerParser
+from qbixnat.dataparser.AmunetParser import AmunetParser
+from qbixnat.dataparser.BloodParser import BloodParser
+from qbixnat.dataparser.CantabParser import CantabParser
+from qbixnat.dataparser.DexaParser import DexaParser
+from qbixnat.dataparser.MridataParser import MridataParser
 
 
 class OPEXUploader():
@@ -144,35 +145,48 @@ class OPEXUploader():
             # Load data PER ROW
             matches.append(sd)
             if self.args.checks is None or not self.args.checks: #Don't upload if checks
-                for i, row in dp.subjects[sd].iterrows():
-                    sampleid = dp.getSampleid(sd, row)
-                    if self.args.skiprows is not None and self.args.skiprows and \
-                            (('NOT_RUN' in row.values) or ('ABORTED' in row.values)):
-                        msg = "Skipping due to ABORT or NOT RUN: %s" % sampleid
-                        logging.warning(msg)
-                        print(msg)
-                        continue
-                    row.replace(np.nan, '', inplace=True)
-
-                    # Sample
-                    xsdtypes = dp.getxsd()
-                    if ('amunet' in xsdtypes):
-                        msg = self.loadAMUNETdata(sampleid, i, row, s, dp)
-                        logging.info(msg)
-                        print(msg)
-                    elif ('FS' in xsdtypes or 'COBAS' in xsdtypes):
-                        xsd = dp.getxsd()[dp.type]
-                        (mandata, data) = dp.mapData(row, i, xsd)
-                        msg = self.loadSampledata(s, xsd, dp.type + "_" + sampleid, mandata, data)
-                        logging.info(msg)
-                        print(msg)
-                    else: #cantab and ACER
-                        for type in xsdtypes.keys():
-                            (mandata, data) = dp.mapData(row, i, type)
-                            xsd = xsdtypes[type]
-                            msg = self.loadSampledata(s, xsd, type + "_" + sampleid, mandata, data)
+                xsdtypes = dp.getxsd()
+                if 'dexa' in xsdtypes:
+                    checkfield = dp.fields['Field'][0] #test if data in row
+                    for i, row in dp.subjects[sd].items():
+                        if checkfield in row and not np.isnan(row[checkfield].iloc[0]):
+                            print 'Interval:', dp.intervals[i]
+                            sampleid = dp.getSampleid(sd,i)
+                            (mandata, data) = dp.mapData(row, i, xsdtypes)
+                            msg = self.loadSampledata(s, xsdtypes, sampleid, mandata, data)
                             logging.info(msg)
                             print(msg)
+
+                else:
+                    for i, row in dp.subjects[sd].iterrows():
+                        sampleid = dp.getSampleid(sd, row)
+                        if self.args.skiprows is not None and self.args.skiprows and \
+                                (('NOT_RUN' in row.values) or ('ABORTED' in row.values)):
+                            msg = "Skipping due to ABORT or NOT RUN: %s" % sampleid
+                            logging.warning(msg)
+                            print(msg)
+                            continue
+                        row.replace(np.nan, '', inplace=True)
+
+                        # Sample
+
+                        if ('amunet' in xsdtypes):
+                            msg = self.loadAMUNETdata(sampleid, i, row, s, dp)
+                            logging.info(msg)
+                            print(msg)
+                        elif ('FS' in xsdtypes or 'COBAS' in xsdtypes):
+                            xsd = dp.getxsd()[dp.type]
+                            (mandata, data) = dp.mapData(row, i, xsd)
+                            msg = self.loadSampledata(s, xsd, dp.type + "_" + sampleid, mandata, data)
+                            logging.info(msg)
+                            print(msg)
+                        else: #cantab and ACER
+                            for type in xsdtypes.keys():
+                                (mandata, data) = dp.mapData(row, i, type)
+                                xsd = xsdtypes[type]
+                                msg = self.loadSampledata(s, xsd, type + "_" + sampleid, mandata, data)
+                                logging.info(msg)
+                                print(msg)
         return (missing,matches)
 
 
@@ -296,6 +310,8 @@ if __name__ == "__main__":
     parser.add_argument('--mridata', action='store', help='Upload MRI data from directory - detects ASHS or FreeSurf from filename')
     parser.add_argument('--mri', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
+    parser.add_argument('--dexa', action='store', help='Upload DEXA data from directory')
+    parser.add_argument('--cosmed', action='store', help='Upload COSMED data from directory')
 
     args = parser.parse_args()
     uploader = OPEXUploader(args)
@@ -511,13 +527,43 @@ if __name__ == "__main__":
                                 msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
                                 print(msg)
                                 logging.info(msg)
-                    except:
-                        e = sys.exc_info()[0]
+                    except Exception as e:
                         raise ValueError(e)
                 else:
                     raise IOError("Input dir error")
 
+            # Upload DEXA data from directory
+            if (uploader.args.dexa is not None and uploader.args.dexa):
+                sheet = 0
+                skip = 4
+                inputdir = uploader.args.dexa
+                print "Running DEXA: ", inputdir
+                if uploader.args.fields is not None:
+                    fields = os.path.join("resources", uploader.args.fields)
+                else:
+                    fields = os.path.join("resources", "dexa_fields.xlsx")
+                if access(inputdir, R_OK):
+                    seriespattern = 'DXA Data entry*.xlsx'
+                    try:
+                        files = glob.glob(join(inputdir, seriespattern))
+                        print "Files:", len(files)
+                        project = uploader.xnat.get_project(projectcode)
+                        for f2 in files:
+                            print "Loading ", f2
+                            dp = DexaParser(fields, f2, sheet, skip)
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
+                                                                     f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                print(msg)
+                                logging.info(msg)
 
+                    except Exception as e:
+                        raise ValueError(e)
+            else:
+                raise IOError("Input dir error")
 
         else:
             raise ConnectionError("Connection failed - check config")

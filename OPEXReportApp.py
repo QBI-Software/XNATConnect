@@ -45,7 +45,7 @@ class OPEXReportApp(object):
             self.logs = config['LOGS']
         else:
             logging.error('Unable to read config - using defaults')
-            self.database = 'opex'
+            self.database = 'xnat-dev-opex'
             self.project = 'P1'
             self.cache = 'cache'
             self.dbconfig = join(home,'.xnat.cfg')
