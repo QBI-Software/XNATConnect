@@ -12,26 +12,15 @@ Created on Thu Mar 2 2017
 
 import argparse
 import glob
-from datetime import datetime
 from os import R_OK, access
 from os.path import join
-import numpy as np
 
+import numpy as np
 import pandas as pd
 
-from qbixnat.dataparser.DataParser import DataParser
+from qbixnat.dataparser.DataParser import DataParser, stripspaces
 
 VERBOSE = 0
-def stripspaces(row,column):
-    """
-    Strips out whitespace before, within, after a value in column of row
-    :param row:
-    :param column:
-    :return:
-    """
-    val = str(row[column])
-    return val.replace(" ",'')
-
 
 class DexaParser(DataParser):
     def __init__(self, fields, *args):

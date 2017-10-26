@@ -74,7 +74,15 @@ def convertExcelDate(orig):
     dt = datetime.fromordinal(dateoffset + int(orig))
     return dt
 
-
+def stripspaces(row,column):
+    """
+    Strips out whitespace before, within, after a value in column of row
+    :param row:
+    :param column:
+    :return:
+    """
+    val = str(row[column])
+    return val.replace(" ",'')
 ########################################################################
 
 if __name__ == "__main__":
