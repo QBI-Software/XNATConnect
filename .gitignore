@@ -49,11 +49,9 @@ Temporary Items
 *.zip
 *.IMA
 *.dcm
-*.xml
 *.pyc
 *.log
 *.SR
-*.xlsx
 cache/*
 sampledata/*
 *.py~
