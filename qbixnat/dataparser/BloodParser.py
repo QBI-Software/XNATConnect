@@ -37,6 +37,18 @@ class BloodParser(DataParser):
             df = pandas.read_csv(fields, header=0)
             self.fields = df[self.type]
             self.fields.dropna(inplace=True)
+            #TODO replace headers with Value.x - true for COBAS data SO FAR
+            if self.type =='COBAS':
+                colnames = {}
+                v=1
+                for i in range(len(self.fields)):
+                    colnames['Value.' + str(v)] = self.fields[i]
+                    v = v + 2
+
+                df = self.data.rename(index=str, columns=colnames)
+                print("NB. renamed columns: ", colnames)
+                self.data = df
+
         except:
             raise ValueError("Cannot access fields")
 

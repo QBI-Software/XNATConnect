@@ -22,18 +22,23 @@ import pandas
 
 class DataParser(object):
 
-    def __init__(self, datafile, sheet=0,skiplines=0):
+    def __init__(self, datafile, sheet=0,skiplines=0, header=None):
         self.datafile = datafile #full pathname to data file
         if (datafile is not None and len(datafile)> 0):
             (bname, extn)= splitext(basename(datafile))
             self.type = extn #extension - xlsx or csv
             self.sheet = sheet
             self.skiplines = skiplines
+            self.header = header
             self._loadData()
 
     def _loadData(self):
         if self.type =='.xlsx' or self.type == '.xls':
-            self.data = pandas.read_excel(self.datafile, skiprows=self.skiplines, sheetname=self.sheet, skip_blank_lines=True)
+            if self.header is None:
+                self.data = pandas.read_excel(self.datafile, skiprows=self.skiplines, sheetname=self.sheet, skip_blank_lines=True)
+            else:
+                self.data = pandas.read_excel(self.datafile, skiprows=self.skiplines, sheetname=self.sheet,
+                                              skip_blank_lines=True, header=self.header)
         elif self.type == '.csv':
             self.data = pandas.read_csv(self.datafile, skip_blank_lines=True)
         else:

@@ -1,8 +1,8 @@
 COBAS,ELISAS,MULTIPLEX
-HGH,Ghrelin,GH
-Prolactin,CathepsinB,Leptin
-Cortisol,,BDNF
-Insulin,,IGFBP7
+Prolactin,Ghrelin,GH
+Insulin,CathepsinB,Leptin
+HGH,,BDNF
+Cortisol,,IGFBP7
 ,,IL1
 ,,IL4
 ,,IL6
