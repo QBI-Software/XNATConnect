@@ -12,7 +12,6 @@ Created on Thu Mar 2 2017
 
 import argparse
 import glob
-import re
 from datetime import datetime
 from os import R_OK, access
 from os.path import join, basename, splitext
@@ -21,7 +20,6 @@ import pandas
 
 
 class DataParser(object):
-
     def __init__(self, datafile, sheet=0,skiplines=0, header=None):
         self.datafile = datafile #full pathname to data file
         if (datafile is not None and len(datafile)> 0):
@@ -45,8 +43,8 @@ class DataParser(object):
             self.data = None
         if self.data is not None:
             print('Data loaded')
-            self.data.dropna(how="all", axis=0, inplace=True) #cleanup if rows are all NaN
-            self.data.fillna("")  #replace remaining NaNs with empty string
+            self.data.dropna(how="all", axis=0, inplace=True)  # cleanup if rows are all NaN
+            self.data.fillna("")  # replace remaining NaNs with empty string
         else:
             print('No data to load')
 
@@ -54,8 +52,7 @@ class DataParser(object):
         '''TO implement by extending class'''
         self.subjects = dict()
 
-
-    def formatDobNumber(self,orig):
+    def formatDobNumber(self, orig):
         """
         Reformats DOB string from Excel data float to yyyy-mm-dd
         """
@@ -63,7 +60,7 @@ class DataParser(object):
         dt = datetime.fromordinal(dateoffset + int(orig))
         return dt.strftime("%Y-%m-%d")
 
-    def formatCondensedDate(self,orig):
+    def formatCondensedDate(self, orig):
         """
         Reformats date number from Excel to yyyymmdd
         """
@@ -71,14 +68,25 @@ class DataParser(object):
         dt = datetime.fromordinal(dateoffset + int(orig))
         return dt.strftime("%Y%m%d")
 
+
 def convertExcelDate(orig):
     """
     Reformats date number from Excel to datetime
     """
-    #from datetime import datetime
+    # from datetime import datetime
     dateoffset = 693594
     dt = datetime.fromordinal(dateoffset + int(orig))
     return dt
+
+def stripspaces(row,column):
+    """
+    Strips out whitespace before, within, after a value in column of row
+    :param row:
+    :param column:
+    :return:
+    """
+    val = str(row[column])
+    return val.replace(" ",'')
 ########################################################################
 
 if __name__ == "__main__":
@@ -87,7 +95,8 @@ if __name__ == "__main__":
             Reads files in a directory and extracts data ready to load to XNAT database
 
              ''')
-    parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\sampledata\\cantab")
+    parser.add_argument('--filedir', action='store', help='Directory containing files',
+                        default="..\\sampledata\\cantab")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract', default="1")
     args = parser.parse_args()
 
@@ -102,8 +111,8 @@ if __name__ == "__main__":
             files = glob.glob(join(inputdir, seriespattern))
             print("Files:", len(files))
             for f2 in files:
-                print("Loading",f2)
-                dp = DataParser(f2,sheet)
+                print("Loading", f2)
+                dp = DataParser(f2, sheet)
                 dp.sortSubjects()
                 print('Subject summary:', len(dp.subjects))
 

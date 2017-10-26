@@ -25,16 +25,15 @@ class OPEXUploaderGUI(UploaderGUI):
         self.Show()
 
     def __loadConfig(self):
-        if self.configfile is not None:
-            try:
-                if access(self.configfile, R_OK):
-                    print("Loading config file")
-                    config = ConfigObj(self.configfile, encoding='UTF-8')
-                    self.runoptions = config['options']
-                    return True
+        if self.configfile is not None and access(self.configfile, R_OK):
+            print("Loading config file")
+            config = ConfigObj(self.configfile, encoding='UTF-8')
+            if 'options' in config:
+                self.runoptions = config['options']
+            return True
+        else:
+            raise IOError("Config file not accessible: %s", self.configfile)
 
-            except:
-                raise IOError
         return False
 
     def __loadCommand(self, options):
@@ -128,7 +127,7 @@ class OPEXUploaderGUI(UploaderGUI):
             return 0
         options = [runoption, db, proj]
         if self.dirname is None or len(self.dirname) <=0:
-            dlg = wx.MessageDialog(self, "Data directory not specified", "About OPEX Uploader", wx.OK)
+            dlg = wx.MessageDialog(self, "Data directory not specified", "OPEX Uploader", wx.OK)
             dlg.ShowModal()  # Show it
             dlg.Destroy()
         else:
