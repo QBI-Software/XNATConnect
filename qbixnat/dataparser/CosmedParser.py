@@ -38,9 +38,12 @@ Created on Thu Mar 2 2017
 import argparse
 import glob
 from datetime import datetime
-from os import R_OK, access
-from os.path import join, basename
+from os import R_OK, access,mkdir
+from os.path import join, basename, split, isdir
 import numpy as np
+import logging
+from openpyxl import load_workbook
+
 
 import pandas as pd
 from qbixnat.dataparser.DataParser import stripspaces
@@ -50,6 +53,7 @@ VERBOSE = 1
 #Not using DataParser as too complex
 class CosmedParser():
     def __init__(self, inputdir,inputsubdir,datafile,fieldsfile):
+        self.inputdir = inputdir
         #Load fields
         self.subjectdataloc = pd.read_excel(fieldsfile, header=0, sheetname='cosmed')
         self.fields = pd.read_excel(fieldsfile, header=0, sheetname='cosmed_xnat')
@@ -57,23 +61,31 @@ class CosmedParser():
 
         #Get list of subjects - parse individual files
         self.files = glob.glob(join(inputdir, inputsubdir, "*.xlsx"))
-        print('Files: %d' % len(self.files))
+        #create an output dir for processed files
+        pdir = join(inputdir,inputsubdir,'processed')
+        if not isdir(pdir):
+            mkdir(pdir)
 
         #Load efficiency data from single file
         self.effdata = pd.read_excel(join(inputdir, datafile), sheetname=0, header=1)
         self.effdata.drop(self.effdata.index[0], inplace=True)
         self.effdata['SubjectID'] = self.effdata.apply(lambda x: stripspaces(x, 'ID'), axis=1)
         self.effdata_cols = {'0':[5,8], '3':[9,12],'6':[13,16], '9':[17,20], '12':[21,24]}
+
+        #Load data from files
         cols = ['SubjectID','interval','date', 'filename','time']
         self.df = pd.DataFrame(columns=cols+self.fields['Parameter'].tolist())
         self.loaded = self.__loadData()
+        msg = "Data fully loaded: %s from %d files" % (self.loaded, len(self.files))
+        print(msg)
+        logging.info(msg)
 
     def __loadData(self):
         rtn = False
         try:
             for f in self.files:
                 filename = basename(f)
-                if "MonthA" in filename:
+                if "MonthA" in filename or filename.startswith('~'):
                     continue
                 fdata = self.parseFilename(filename)
                 df_file_data = pd.read_excel(f, header=0, sheetname='Data')
@@ -93,11 +105,18 @@ class CosmedParser():
                 row=fdata+protocoldata+metabolicdata+cardiodata+effdata+recoverydata
                 s_x = pd.Series(row, index=self.df.columns.tolist())
                 self.df = self.df.append(s_x, ignore_index=True)
+                #Generate phase data as separate tab
+                self.writePhasedata(f, df_file_data, df_file_results)
 
             print(self.df)
             if not self.df.empty:
+                #print to file
+                now = datetime.now()
+                outputfile = 'cosmed_xnatupload_' + now.strftime('%Y%m%d')+'.csv'
+                self.df.to_csv(join(self.inputdir,outputfile), index=False)
                 rtn = True
-
+        except Exception as e:
+            print 'ERROR:', e
         finally:
             return rtn
 
@@ -186,6 +205,72 @@ class CosmedParser():
             print("Eff:",data)
         return data
 
+    def getTimesIntervals(self,row,n):
+        """
+        Apply function - use with df.apply(lambda t: getTimes(t,3), axis=1)
+        :param t:
+        :param n:
+        :return:
+        """
+        t= row['t']
+        return ((t.minute * 60 + t.second) % (n * 60) == 0)
+
+    def getRow(self,row, val):
+        return (row['t'] == val)
+
+    def writePhasedata(self,f,df_file_data, df_file_results):
+        """
+        Collate Phase data and append as new tab in datafile
+        :param f:
+        :return:
+        """
+        book = None
+        writer = None
+        try:
+            book = load_workbook(f)
+            #Output to file copy
+            fparts = split(f) #f.replace('.xlsx','_stages.xlsx')
+            f0 = join(fparts[0],'processed',fparts[1])
+            writer = pd.ExcelWriter(f0, engine='openpyxl')
+            writer.book = book
+            writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
+            #Generate data
+            df = df_file_data.drop([0, 1]) #remove empty rows
+            phases = df['Phase'].unique().tolist() + ['AT','RC','Max'] #list of phase names
+            for n in [3,1]:
+                df['t'+str(n)] = df.apply(lambda t: self.getTimesIntervals(t, n), axis=1)
+            d3 = df[df['t3'] == True]
+            d1 = df[df['t1']== True]
+
+            results = dict()
+            cols=[]
+            for phase in phases:
+                if phase =='RECOVERY':
+                    d = d1[d1['Phase'] == phase]
+                elif phase in ['AT','RC','Max']:
+                    d = df.apply(lambda t: self.getRow(t,df_file_results[phase].iloc[0]),axis=1)
+                else:
+                    d = d3[d3['Phase'] == phase]
+                results[phase.title()] = d[self.fields['Parameter'].tolist()[0:14]].T
+                if len(d) > 1:
+                    cols=cols +[phase.title() + " " +str(c) for c in range(len(d))]
+                else:
+                    cols.append(phase.title())
+
+            r = pd.concat([results['Rest'], results['Warmup'], results['Exercise'], results['Recovery']], join='inner', axis=1)
+            print "RESULTS:", r
+            r.columns = cols
+            r.to_excel(writer, "Phases")
+            writer.save()
+        except Exception as e:
+            logging.error(e)
+        finally:
+            print('Done')
+            # if book is not None:
+            #     book.close()
+            # if writer is not None:
+            #     writer.close()
+
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
         self.subjects = dict()
@@ -248,12 +333,12 @@ if __name__ == "__main__":
             Reads files in a directory and extracts data for upload to XNAT
 
              ''')
-    parser.add_argument('--filedir', action='store', help='Directory containing files', default="..\\..\\sampledata\\cosmed")
+    parser.add_argument('--filedir', action='store', help='Directory containing files', default="sampledata\\cosmed")
     parser.add_argument('--subdir', action='store', help='Subdirectory with individual files',
                         default="VO2data_crosschecked")
     parser.add_argument('--datafile', action='store', help='VEVCO2 file', default='VO2data_VEVCO2_20171009.xlsx')
     parser.add_argument('--fields', action='store', help='Fields to extract',
-                        default="..\\..\\resources\\cosmed_fields.xlsx")
+                        default="resources\\cosmed_fields.xlsx")
     args = parser.parse_args()
 
     inputdir = args.filedir
@@ -281,4 +366,8 @@ if __name__ == "__main__":
                 #         print field, "=", row[field].iloc[0]
 
     else:
-        print("Cannot access directory: ", inputdir)
+        print "Cannot access directory: ", inputdir
+        inputdir = "..\\..\\" + inputdir
+        if access(inputdir,R_OK):
+            print "But can access this one: ", inputdir
+
