@@ -215,8 +215,40 @@ class CosmedParser():
         t= row['t']
         return ((t.minute * 60 + t.second) % (n * 60) == 0)
 
-    def getRow(self,row, val):
+    def getRowt(self,row, val):
         return (row['t'] == val)
+
+    # def updateVal(self,col,hdr):
+    #     print col
+    #     print hdr
+    #     for f in hdr['Parameter']:
+    #         if isinstance(f,float) and np.isnan(f):
+    #             continue
+    #         if f in col.index and col[f]:
+    #             print f, "=", col[f]
+    #             r = hdr[hdr['Parameter']==f].values[0][1]
+    #             if isinstance(r,float) and np.isnan(r):
+    #                 continue
+    #             col[f] = r
+    #             print f, "=", col[f]
+    #
+    #     return col
+
+    def updateRowVal(self,col,hdr):
+        # print col
+        # print hdr
+        for f in hdr['Parameter']:
+            if isinstance(f,float) and np.isnan(f):
+                continue
+            if f in col.columns:
+                print f, "=", col[f].values[0]
+                r = hdr[hdr['Parameter']==f].values[0][1]
+                if isinstance(r,float) and np.isnan(r):
+                    continue
+                col[f] = r  #ignore warning as doesn't work with iloc or loc
+                print f, "=", col[f].values[0]
+
+        return col
 
     def writePhasedata(self,f,df_file_data, df_file_results):
         """
@@ -229,35 +261,47 @@ class CosmedParser():
         try:
             book = load_workbook(f)
             #Output to file copy
-            fparts = split(f) #f.replace('.xlsx','_stages.xlsx')
+            fparts = split(f)
             f0 = join(fparts[0],'processed',fparts[1])
             writer = pd.ExcelWriter(f0, engine='openpyxl')
             writer.book = book
             writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
             #Generate data
             df = df_file_data.drop([0, 1]) #remove empty rows
-            phases = df['Phase'].unique().tolist() + ['AT','RC','Max'] #list of phase names
+            extraphases = ['AT','RC','Max']
+            phases = df['Phase'].unique().tolist() + extraphases #list of phase names
+            #Generate columns for time intervals
             for n in [3,1]:
                 df['t'+str(n)] = df.apply(lambda t: self.getTimesIntervals(t, n), axis=1)
             d3 = df[df['t3'] == True]
             d1 = df[df['t1']== True]
+            #Generate column for extra - from manual adjustments
+            for ephase in extraphases:
+                df[ephase] = df.apply(lambda t: self.getRowt(t,df_file_results[ephase].iloc[0]),axis=1)
 
             results = dict()
             cols=[]
             for phase in phases:
                 if phase =='RECOVERY':
                     d = d1[d1['Phase'] == phase]
+                    colname = phase.title()
                 elif phase in ['AT','RC','Max']:
-                    d = df.apply(lambda t: self.getRow(t,df_file_results[phase].iloc[0]),axis=1)
+                    d = df[df[phase]==True]
+                    du = self.updateRowVal(d, df_file_results[['Parameter',phase]])
+                    print phase, " Updated: ", du
+                    d = du
+                    #d[phase +'_update'] = d.apply(lambda r: self.updateVal(r, df_file_results[['Parameter',phase]]), axis=1)
+                    colname = phase
                 else:
                     d = d3[d3['Phase'] == phase]
-                results[phase.title()] = d[self.fields['Parameter'].tolist()[0:14]].T
+                    colname = phase.title()
+                results[colname] = d[self.fields['Parameter'].tolist()[0:14]].T
                 if len(d) > 1:
-                    cols=cols +[phase.title() + " " +str(c) for c in range(len(d))]
+                    cols=cols +[colname + " " +str(c) for c in range(len(d))]
                 else:
-                    cols.append(phase.title())
+                    cols.append(colname)
 
-            r = pd.concat([results['Rest'], results['Warmup'], results['Exercise'], results['Recovery']], join='inner', axis=1)
+            r = pd.concat([results['Rest'], results['Warmup'], results['Exercise'], results['Recovery'], results['AT'], results['RC'], results['Max']], join='inner', axis=1)
             print "RESULTS:", r
             r.columns = cols
             r.to_excel(writer, "Phases")
@@ -349,8 +393,8 @@ if __name__ == "__main__":
     if access(inputdir, R_OK):
         dp = CosmedParser(inputdir,inputsubdir,datafile,fieldsfile)
         print(dp.df)
-        # xsd = dp.getxsd()
-        # dp.sortSubjects()
+        xsd = dp.getxsd()
+        dp.sortSubjects()
         #
         # for sd in dp.subjects:
         #     print '\n***********SubjectID:', sd
