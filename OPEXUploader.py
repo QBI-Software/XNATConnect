@@ -21,6 +21,7 @@ from qbixnat.dataparser.BloodParser import BloodParser
 from qbixnat.dataparser.CantabParser import CantabParser
 from qbixnat.dataparser.DexaParser import DexaParser
 from qbixnat.dataparser.MridataParser import MridataParser
+from qbixnat.dataparser.CosmedParser import CosmedParser
 
 
 class OPEXUploader():
@@ -156,7 +157,14 @@ class OPEXUploader():
                             msg = self.loadSampledata(s, xsdtypes, sampleid, mandata, data)
                             logging.info(msg)
                             print(msg)
-
+                elif 'cosmed' in xsdtypes:
+                    for i, row in dp.subjects[sd].items():
+                        row.replace(np.nan, '', inplace=True)
+                        sampleid = dp.getSampleid(sd,i)
+                        (mandata, data) = dp.mapData(row, i, xsdtypes)
+                        msg = self.loadSampledata(s, xsdtypes, sampleid, mandata, data)
+                        logging.info(msg)
+                        print(msg)
                 else:
                     for i, row in dp.subjects[sd].iterrows():
                         sampleid = dp.getSampleid(sd, row)
@@ -313,6 +321,8 @@ if __name__ == "__main__":
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
     parser.add_argument('--dexa', action='store', help='Upload DEXA data from directory')
     parser.add_argument('--cosmed', action='store', help='Upload COSMED data from directory')
+    parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory', default="VO2data_crosschecked")
+    parser.add_argument('--cosmed_datafile', action='store', help='COSMED VO2 datafile', default='VO2data_VEVCO2_20171009.xlsx')
 
     args = parser.parse_args()
     uploader = OPEXUploader(args)
@@ -563,8 +573,41 @@ if __name__ == "__main__":
 
                     except Exception as e:
                         raise ValueError(e)
-            else:
-                raise IOError("Input dir error")
+                else:
+                    raise IOError("Input dir error")
+
+            # Upload COSMED data from directory
+            if (uploader.args.cosmed is not None and uploader.args.cosmed):
+                inputdir = uploader.args.cosmed
+                inputsubdir=uploader.args.cosmed_subdir #"VO2data_crosschecked"
+                datafile = uploader.args.cosmed_datafile #'VO2data_VEVCO2_20171009.xlsx'
+                print "Running COSMED: ", inputdir
+                if uploader.args.fields is not None:
+                    fields = os.path.join("resources", uploader.args.fields)
+                else:
+                    fields = os.path.join("resources", "cosmed_fields.xlsx")
+                if access(inputdir, R_OK):
+                    try:
+                        project = uploader.xnat.get_project(projectcode)
+                        dp = CosmedParser(inputdir, inputsubdir, datafile, fields)
+                        print(dp.df)
+
+                        (missing, matches) = uploader.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = uploader.outputChecks(projectcode,
+                                                                 matches,
+                                                                 missing,
+                                                                 inputdir,
+                                                                 datafile)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
+
+                    except Exception as e:
+                        raise ValueError(e)
+                else:
+                    raise IOError("Input dir error")
 
         else:
             raise ConnectionError("Connection failed - check config")

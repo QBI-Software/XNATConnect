@@ -37,7 +37,7 @@ Created on Thu Mar 2 2017
 
 import argparse
 import glob
-from datetime import datetime
+from datetime import datetime, time
 from os import R_OK, access,mkdir
 from os.path import join, basename, split, isdir
 import numpy as np
@@ -89,6 +89,8 @@ class CosmedParser():
                     continue
                 fdata = self.parseFilename(filename)
                 df_file_data = pd.read_excel(f, header=0, sheetname='Data')
+                #Replace LEVEL with int
+                df_file_data['Dyspnea'] = df_file_data['Dyspnea'].apply(lambda r: self.extractLevel(r))
                 df_data_ex = df_file_data[df_file_data['Phase']=='EXERCISE']
                 df_data_rec = df_file_data[df_file_data['Phase'] == 'RECOVERY']
                 df_file_results = pd.read_excel(f, header=0, sheetname='Results', skiprows=4)
@@ -110,15 +112,31 @@ class CosmedParser():
 
             print(self.df)
             if not self.df.empty:
+                self.cleandatatypes()
+                print("cleaned=",self.df)
                 #print to file
                 now = datetime.now()
                 outputfile = 'cosmed_xnatupload_' + now.strftime('%Y%m%d')+'.csv'
                 self.df.to_csv(join(self.inputdir,outputfile), index=False)
+                msg = 'COSMED data file for upload: %s' % join(self.inputdir,outputfile)
+                logging.info(msg)
+                print msg
                 rtn = True
         except Exception as e:
             print 'ERROR:', e
         finally:
             return rtn
+
+    def extractLevel(self,dataval):
+        """
+        convert LEVEL_X to integer
+        :param dval:
+        :return:
+        """
+        #dataval = row['Dyspnea']
+        if (isinstance(dataval, str) or isinstance(dataval,unicode)) and dataval.startswith('LEVEL'):
+            dval = dataval.split("_")
+            return dval[1]
 
     def parseFilename(self,filename):
         fparts = filename.split("_")
@@ -137,9 +155,11 @@ class CosmedParser():
             if max is None:
                 max=''
             data.append(max)
-        # One field is in data tab not results
+        # One field (Dyspnea - Borg) is in data tab not results
         datafield = fieldnames[3]
-        data.append(df_data_ex[datafield].iloc[-1])
+        dataval = df_data_ex[datafield].iloc[-1]
+        data.append(str(dataval))
+
         if VERBOSE:
             print("Proto:",data)
         return data
@@ -183,7 +203,7 @@ class CosmedParser():
         for i in [1,5,9]:
             d1 = df_data['HR'].iloc[i]
             d = d0-d1
-            data.append(d)
+            data.append(str(d))
         if VERBOSE:
             print("HRR:",data)
         return data
@@ -216,37 +236,31 @@ class CosmedParser():
         return ((t.minute * 60 + t.second) % (n * 60) == 0)
 
     def getRowt(self,row, val):
+        if isinstance(val,str) and val.startswith('LEVEL'):
+            dval = val.split("_")
+            val = dval[1]
         return (row['t'] == val)
 
-    # def updateVal(self,col,hdr):
-    #     print col
-    #     print hdr
-    #     for f in hdr['Parameter']:
-    #         if isinstance(f,float) and np.isnan(f):
-    #             continue
-    #         if f in col.index and col[f]:
-    #             print f, "=", col[f]
-    #             r = hdr[hdr['Parameter']==f].values[0][1]
-    #             if isinstance(r,float) and np.isnan(r):
-    #                 continue
-    #             col[f] = r
-    #             print f, "=", col[f]
-    #
-    #     return col
-
     def updateRowVal(self,col,hdr):
-        # print col
-        # print hdr
+        """
+        update values with adjusted values
+        :param col:
+        :param hdr:
+        :return:
+        """
         for f in hdr['Parameter']:
             if isinstance(f,float) and np.isnan(f):
                 continue
             if f in col.columns:
-                print f, "=", col[f].values[0]
+                i0=col[f].values[0]
                 r = hdr[hdr['Parameter']==f].values[0][1]
                 if isinstance(r,float) and np.isnan(r):
                     continue
-                col[f] = r  #ignore warning as doesn't work with iloc or loc
-                print f, "=", col[f].values[0]
+                d = {col[f].iloc[0]: r}  #ignore warning as doesn't work with iloc or loc
+                col[f].replace(d, inplace=True)
+                msg = f, "=", i0, '[', type(i0), '] updated TO ', col[f].iloc[0],'[', type(col[f].iloc[0]),"]"
+                logging.debug(msg)
+                print(msg)
 
         return col
 
@@ -290,14 +304,13 @@ class CosmedParser():
                     du = self.updateRowVal(d, df_file_results[['Parameter',phase]])
                     print phase, " Updated: ", du
                     d = du
-                    #d[phase +'_update'] = d.apply(lambda r: self.updateVal(r, df_file_results[['Parameter',phase]]), axis=1)
                     colname = phase
                 else:
                     d = d3[d3['Phase'] == phase]
                     colname = phase.title()
                 results[colname] = d[self.fields['Parameter'].tolist()[0:14]].T
                 if len(d) > 1:
-                    cols=cols +[colname + " " +str(c) for c in range(len(d))]
+                    cols=cols +[colname + " " +str(c + 1) for c in range(len(d))]
                 else:
                     cols.append(colname)
 
@@ -309,23 +322,44 @@ class CosmedParser():
         except Exception as e:
             logging.error(e)
         finally:
-            print('Done')
+            print('Phase data tab Done')
             # if book is not None:
             #     book.close()
             # if writer is not None:
             #     writer.close()
 
+    def cleandatatypes(self):
+        """
+        ensure correct datatypes for uploading
+        :return:
+        """
+        self.df.fillna('', inplace=True)
+        print self.df.dtypes
+        for field in ['Grade','P Syst', 'P Diast']:
+            self.df[field] = self.df[field].apply(lambda t: self.to_int(t) )
+        print self.df.dtypes
+
+    def to_int(self, t):
+        if t != '':
+            return int(t)
+        else:
+            return t
+
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
         self.subjects = dict()
         if self.df is not None:
-            sids = self.df[0]['SubjectID'].unique()
+            sids = self.df['SubjectID'].unique()
             ids = [i for i in sids if len(i) == 6]
+            intervals = range(0, 13, 3)
             for sid in ids:
                 self.subjects[sid] = dict()
-                # for i, intval in self.intervals.items():
-                #     data = self.df[i]
-                #     self.subjects[sid][i]= data[data['SubjectID'] == sid]
+                data = self.df[self.df['SubjectID']==sid]
+                for i in intervals:
+                    idata = data[data['interval'] == str(i)]
+                    if not idata.empty:
+                        self.subjects[sid][i]= idata
+
                 if VERBOSE:
                     print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
@@ -338,7 +372,7 @@ class CosmedParser():
         :param row: row data with unique number
         :return: id
         """
-        id = 'DXA_' + sd + '_' + str(interval)
+        id = 'COS_' + sd + '_' + str(interval)
         return id
 
     def getxsd(self):
@@ -351,9 +385,10 @@ class CosmedParser():
         :param row: pandas series row data
         :return: data kwargs structure to load to xnat expt
         """
-
+        vdate =datetime.strptime(row['date'].iloc[0] + " " + row['time'].iloc[0], '%Y%m%d %I:%M:%S %p')
         mandata = {
             xsd + '/interval': str(i),
+            xsd + '/date' : vdate.strftime("%Y.%m.%d %H:%M:%S"),
             xsd + '/sample_id': str(row.index.values[0]),  # row number in this data file for reference
             xsd + '/sample_quality': 'Good',  # default - check later if an error
             xsd + '/data_valid': 'Checked',
@@ -361,10 +396,18 @@ class CosmedParser():
         }
         motdata = {}
         for i in range(len(self.fields)):
-            field = self.fields['Field'][i]
+            field = self.fields['Parameter'][i]
             xnatfield = self.fields['XnatField'][i]
-            if field in row and not np.isnan(row[field].iloc[0]):
-                motdata[xsd + '/' + xnatfield] = str(row[field].iloc[0])
+            if field in row:
+                d=row[field].iloc[0]
+                if isinstance(d,time):
+                    motdata[xsd + '/' + xnatfield] = str(d.hour * 60 + d.minute + float(d.second)/60)
+                elif isinstance(d, datetime):
+                    motdata[xsd + '/' + xnatfield] = d.strftime("%Y%m%d")
+                elif isinstance(d,float) and np.isnan(d):
+                    motdata[xsd + '/' + xnatfield] = ''
+                else:
+                    motdata[xsd + '/' + xnatfield] = str(d)
         return (mandata, motdata)
 
 
@@ -395,19 +438,15 @@ if __name__ == "__main__":
         print(dp.df)
         xsd = dp.getxsd()
         dp.sortSubjects()
-        #
-        # for sd in dp.subjects:
-        #     print '\n***********SubjectID:', sd
-        #     for i, row in dp.subjects[sd].items():
-        #         #print 'Interval:', dp.intervals[i]
-        #         sampleid = dp.getSampleid(sd, i)
-        #         print 'Sampleid:', sampleid
-        #         (mandata, data) = dp.mapData(row, i, xsdtypes)
-        #         print mandata
-        #         print data
-                # for field in dp.fields['Field']:
-                #     if field in row and not np.isnan(row[field].iloc[0]):
-                #         print field, "=", row[field].iloc[0]
+
+        for sd in dp.subjects:
+            print '\n***********SubjectID:', sd
+            for i, row in dp.subjects[sd].items():
+                sampleid = dp.getSampleid(sd, i)
+                print 'Sampleid: ', sampleid
+                (mandata, data) = dp.mapData(row, i, xsd)
+                print 'MANDATA: ',mandata
+                print 'DATA: ',data
 
     else:
         print "Cannot access directory: ", inputdir
