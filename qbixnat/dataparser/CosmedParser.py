@@ -37,176 +37,222 @@ Created on Thu Mar 2 2017
 
 import argparse
 import glob
-from datetime import datetime, time
-from os import R_OK, access,mkdir
-from os.path import join, basename, split, isdir
-import numpy as np
 import logging
+from datetime import datetime, time
+from os import R_OK, access, mkdir
+from os.path import join, basename, split, isdir
+
+import numpy as np
+import pandas as pd
 from openpyxl import load_workbook
 
-
-import pandas as pd
 from qbixnat.dataparser.DataParser import stripspaces
 
 VERBOSE = 1
 
-#Not using DataParser as too complex
+
+# Not using DataParser as too complex
 class CosmedParser():
-    def __init__(self, inputdir,inputsubdir,datafile,fieldsfile):
+    def __init__(self, inputdir, inputsubdir, datafile, fieldsfile):
         self.inputdir = inputdir
-        #Load fields
+        # Load fields
         self.subjectdataloc = pd.read_excel(fieldsfile, header=0, sheetname='cosmed')
         self.fields = pd.read_excel(fieldsfile, header=0, sheetname='cosmed_xnat')
         self.datafields = pd.read_excel(fieldsfile, header=0, sheetname='cosmed_data')
 
-        #Get list of subjects - parse individual files
+        # Get list of subjects - parse individual files
         self.files = glob.glob(join(inputdir, inputsubdir, "*.xlsx"))
-        #create an output dir for processed files
-        pdir = join(inputdir,inputsubdir,'processed')
+        # create an output dir for processed files
+        pdir = join(inputdir, inputsubdir, 'processed')
         if not isdir(pdir):
             mkdir(pdir)
 
-        #Load efficiency data from single file
-        self.effdata = pd.read_excel(join(inputdir, datafile), sheetname=0, header=1)
-        self.effdata.drop(self.effdata.index[0], inplace=True)
-        self.effdata['SubjectID'] = self.effdata.apply(lambda x: stripspaces(x, 'ID'), axis=1)
-        self.effdata_cols = {'0':[5,8], '3':[9,12],'6':[13,16], '9':[17,20], '12':[21,24]}
-
-        #Load data from files
-        cols = ['SubjectID','interval','date', 'filename','time']
-        self.df = pd.DataFrame(columns=cols+self.fields['Parameter'].tolist())
+        # Load efficiency data from single file
+        self.effdata_cols = {'0': [5, 8], '3': [9, 12], '6': [13, 16], '9': [17, 20], '12': [21, 24]}
+        self.effdata = self.__loadEfficiencydata(join(inputdir, datafile))
+        # Load data from files
         self.loaded = self.__loadData()
-        msg = "Data fully loaded: %s from %d files" % (self.loaded, len(self.files))
-        print(msg)
-        logging.info(msg)
+
+    def __loadEfficiencydata(self, datafile):
+        # Load efficiency data from single file
+        effdata = pd.read_excel(datafile, sheetname=0, header=1)
+        effdata.drop(effdata.index[0], inplace=True)
+        effdata['SubjectID'] = effdata.apply(lambda x: stripspaces(x, 'ID'), axis=1)
+        logging.debug("Loaded Efficiency: %d", len(effdata))
+        return effdata
 
     def __loadData(self):
         rtn = False
+        # Load data from files
+        cols = ['SubjectID', 'interval', 'date', 'time', 'filename'] + self.fields['Parameter'].tolist()
+        self.data = {i: [] for i in cols}
+        f = None
         try:
             for f in self.files:
                 filename = basename(f)
-                if "MonthA" in filename or filename.startswith('~'):
+                if "MonthA" in filename or filename.startswith('~') or filename.startswith('VO2'):
                     continue
                 fdata = self.parseFilename(filename)
                 df_file_data = pd.read_excel(f, header=0, sheetname='Data')
-                #Replace LEVEL with int
+                # Replace LEVEL with int
                 df_file_data['Dyspnea'] = df_file_data['Dyspnea'].apply(lambda r: self.extractLevel(r))
-                df_data_ex = df_file_data[df_file_data['Phase']=='EXERCISE']
+                df_data_ex = df_file_data[df_file_data['Phase'] == 'EXERCISE']
                 df_data_rec = df_file_data[df_file_data['Phase'] == 'RECOVERY']
                 df_file_results = pd.read_excel(f, header=0, sheetname='Results', skiprows=4)
-                if (df_file_data.iloc[0,3] == 'Test Time'):
-                    ftime = df_file_data.iloc[0,4] #format with date
+                if (df_file_data.iloc[0, 3] == 'Test Time'):
+                    ftime = df_file_data.iloc[0, 4]  # format with date
                 else:
                     ftime = ''
                 fdata.append(ftime)
-                protocoldata = self.parseProtocol(df_file_results,df_data_ex,self.fields['Parameter'].tolist()[0:4])
-                metabolicdata = self.parseMetabolic(df_file_results,self.fields['Parameter'].tolist()[4:8])
-                cardiodata = self.parseCardio(df_data_ex,self.fields['Parameter'].tolist()[8:14])
-                effdata = self.parseEfficiency(self.effdata,fdata[0], self.effdata_cols[fdata[1]])
-                recoverydata = self.calcRecovery(df_data_ex,df_data_rec)
-                row=fdata+protocoldata+metabolicdata+cardiodata+effdata+recoverydata
-                s_x = pd.Series(row, index=self.df.columns.tolist())
-                self.df = self.df.append(s_x, ignore_index=True)
-                #Generate phase data as separate tab
+                self.data['time'].append(ftime)
+                protocoldata = self.parseProtocol(df_file_results, df_data_ex, self.fields['Parameter'].tolist()[0:4])
+                metabolicdata = self.parseMetabolic(df_file_results, self.fields['Parameter'].tolist()[4:8])
+                cardiodata = self.parseCardio(df_data_ex, self.fields['Parameter'].tolist()[8:14])
+                effdata = self.parseEfficiency(self.effdata, fdata[0], self.effdata_cols[fdata[1]])
+                recoverydata = self.calcRecovery(df_data_ex, df_data_rec)
+                row = fdata + protocoldata + metabolicdata + cardiodata + effdata + recoverydata
+                print "Row appended:", row
+                # Generate phase data as separate tab
                 self.writePhasedata(f, df_file_data, df_file_results)
+            # Create dataframe with dict in one hist - more efficient
+            self.df = pd.DataFrame.from_dict(self.data)
 
-            print(self.df)
             if not self.df.empty:
-                self.cleandatatypes()
-                print("cleaned=",self.df)
-                #print to file
+                logging.debug("Dataframe loaded rows: %d", len(self.df))
                 now = datetime.now()
-                outputfile = 'cosmed_xnatupload_' + now.strftime('%Y%m%d')+'.csv'
-                self.df.to_csv(join(self.inputdir,outputfile), index=False)
-                msg = 'COSMED data file for upload: %s' % join(self.inputdir,outputfile)
+                outputfile = 'cosmed_xnatupload_' + now.strftime('%Y%m%d') + '.csv'
+                self.df.to_csv(join(self.inputdir, outputfile), index=False)
+                msg = 'COSMED data file for upload: %s' % join(self.inputdir, outputfile)
                 logging.info(msg)
                 print msg
                 rtn = True
         except Exception as e:
-            print 'ERROR:', e
+            if f is not None:
+                msg = 'File: %s - %s' % (f, e)
+            else:
+                msg = e
+            logging.error(msg)
         finally:
+            msg = "COSMED Data Load completed: %d files [%s]" % (len(self.files), rtn)
+            print(msg)
+            logging.info(msg)
             return rtn
 
-    def extractLevel(self,dataval):
+    def extractLevel(self, dataval):
         """
         convert LEVEL_X to integer
         :param dval:
         :return:
         """
-        #dataval = row['Dyspnea']
-        if (isinstance(dataval, str) or isinstance(dataval,unicode)) and dataval.startswith('LEVEL'):
+        # dataval = row['Dyspnea']
+        if (isinstance(dataval, str) or isinstance(dataval, unicode)) and dataval.startswith('LEVEL'):
             dval = dataval.split("_")
-            return dval[1]
+            return int(dval[1])
 
-    def parseFilename(self,filename):
+    def parseFilename(self, filename):
         fparts = filename.split("_")
         # split to ID, interval, date
-        id = fparts[0]
-        interval = fparts[1][0]
-        fdate = fparts[3][0:8]
-        msg = 'Filedata: %s, %s, %s' % (id,interval,fdate)
+        self.data['SubjectID'].append(fparts[0])
+        self.data['interval'].append(fparts[1][0])
+        self.data['date'].append(fparts[3][0:8])
+        self.data['filename'].append(filename)
+        results = [self.data[f][-1] for f in ['SubjectID', 'interval', 'date', 'filename']]
+        msg = 'Filedata: %s' % ",".join(results)
         print(msg)
-        return [id,interval,fdate,filename]
+        logging.debug(msg)
+        return results
 
-    def parseProtocol(self, df_results,df_data_ex, fieldnames):
-        data =[]
+    def parseProtocol(self, df_results, df_data_ex, fieldnames):
+        """
+        Load protocol data
+        :param df_results:
+        :param df_data_ex:
+        :param fieldnames:
+        :return:
+        """
         for field in fieldnames[0:3]:
             max = df_results[df_results['Parameter'] == field]['Max'].values[0]
             if max is None:
-                max=''
-            data.append(max)
+                max = ''
+            if isinstance(max, time):
+                max = max.hour * 60 + max.minute + float(max.second) / 60
+            # data.append(max)
+            self.data[field].append(max)
+
         # One field (Dyspnea - Borg) is in data tab not results
-        datafield = fieldnames[3]
-        dataval = df_data_ex[datafield].iloc[-1]
-        data.append(str(dataval))
+        field = fieldnames[3]
+        dataval = df_data_ex[field].iloc[-1]
+        self.data[field].append(dataval)
+        loadeddata = [self.data[f][-1] for f in fieldnames]
+        # logging.debug("Proto:",loadeddata)
+        return loadeddata
 
-        if VERBOSE:
-            print("Proto:",data)
-        return data
-
-    def parseMetabolic(self, df_data,fieldnames):
-        data =[]
+    def parseMetabolic(self, df_data, fieldnames):
+        """
+        Load metabolic data
+        :param df_data:
+        :param fieldnames:
+        :return:
+        """
         for field in fieldnames:
             max = df_data[df_data['Parameter'] == field]['Max'].values[0]
             if max is None:
-                max=''
-            data.append(max)
-        if VERBOSE:
-            print("Metab:",data)
-        return data
+                max = ''
+            self.data[field].append(max)
+        loadeddata = [self.data[f][-1] for f in fieldnames]
+        # logging.debug("Metab:",loadeddata)
+        return loadeddata
 
     def parseCardio(self, df_data, fieldnames):
-        data =[]
+        """
+        Load cardio data
+        :param df_data:
+        :param fieldnames:
+        :return:
+        """
         for field in fieldnames:
             max = df_data[field].iloc[-1]
-            if max is None:
-                max=''
-            data.append(max)
-        if VERBOSE:
-            print("Cardio:",data)
-        return data
+            if max is None or (isinstance(max, float) and np.isnan(max)):
+                max = ''
+            self.data[field].append(max)
+        loadeddata = [self.data[f][-1] for f in fieldnames]
+        # logging.debug('Cardio:', loadeddata)
+        return loadeddata
 
-    def calcRecovery(self, df_ex,df_data):
+    def calcRecovery(self, df_ex, df_data):
         """
         Get Recovery data fields
         :param df_ex: Exercise data subset
         :param df_data: Recover data subset
-        :return: [HRR1,HRR2,HRR3]
+        :return: [HRR1,HRR3,HRR5]
         """
-        data =[]
-        t0 = df_data['t'].iloc[0]
-        t1 = df_data['t'].iloc[1]
-        dt = (t1.minute *60 + t1.second) - (t0.minute *60 + t0.second)
-        print('time diff=', dt, 's')
+        fields = {1: 'HRR1', 5: 'HRR3', 9: 'HRR5'}
+        if df_ex.empty or df_data.empty:
+            for field in fields.itervalues():
+                self.data[field].append('')
+        else:
+            t0 = df_data['t'].iloc[0]
+            t1 = df_data['t'].iloc[1]
+            dt = (t1.minute * 60 + t1.second) - (t0.minute * 60 + t0.second)
+            if dt == 30:
+                tvals = [1, 5, 9]
+            elif dt ==60:
+                tvals = [1,3,5]
+            else:
+                print('time diff=', dt, 's')
+                tvals = [1,3,5] * int(dt/60)
 
-        d0 = df_ex['HR'].iloc[-1]
-        for i in [1,5,9]:
-            d1 = df_data['HR'].iloc[i]
-            d = d0-d1
-            data.append(str(d))
-        if VERBOSE:
-            print("HRR:",data)
-        return data
+            d0 = df_ex['HR'].iloc[-1]
+            for i in tvals:
+                if i < len(df_data['HR']):
+                    d1 = df_data['HR'].iloc[i]
+                    d = d0 - d1
+                else:
+                    d=''
+                self.data[fields[i]].append(d)
+        loadeddata = [self.data[f][-1] for f in fields.itervalues()]
+        # logging.debug('Recovery:', loadeddata)
+        return loadeddata
 
     def parseEfficiency(self, df_data, sid, intervals):
         """
@@ -216,32 +262,34 @@ class CosmedParser():
         :param intervals: [col_start, col_end]
         :return:
         """
-        row = df_data[df_data['SubjectID']==sid]
-        data = row.iloc[:,intervals[0]:intervals[1]].values.tolist()[0]
+        row = df_data[df_data['SubjectID'] == sid]
+        if not row.empty:
+            data = row.iloc[:, intervals[0]:intervals[1]].values.tolist()[0]
+            if len(data) == 0:
+                data = ['', '', '']
+        else:
+            data = ['', '', '']
 
-        if len(data)==0:
-            data=['','','']
-        if VERBOSE:
-            print("Eff:",data)
+        self.data['VeVCO2 Slope'].append(data[0])
+        self.data['VEVCO2 intercept'].append(data[1])
+        self.data['OUES'].append(data[2])
+        # logging.debug("Efficiency:",data)
         return data
 
-    def getTimesIntervals(self,row,n):
+    def getTimesIntervals(self, row, n):
         """
         Apply function - use with df.apply(lambda t: getTimes(t,3), axis=1)
         :param t:
         :param n:
         :return:
         """
-        t= row['t']
+        t = row['t']
         return ((t.minute * 60 + t.second) % (n * 60) == 0)
 
-    def getRowt(self,row, val):
-        if isinstance(val,str) and val.startswith('LEVEL'):
-            dval = val.split("_")
-            val = dval[1]
+    def getRowt(self, row, val):
         return (row['t'] == val)
 
-    def updateRowVal(self,col,hdr):
+    def updateRowVal(self, col, hdr):
         """
         update values with adjusted values
         :param col:
@@ -249,22 +297,20 @@ class CosmedParser():
         :return:
         """
         for f in hdr['Parameter']:
-            if isinstance(f,float) and np.isnan(f):
+            if isinstance(f, float) and np.isnan(f):
                 continue
             if f in col.columns:
-                i0=col[f].values[0]
-                r = hdr[hdr['Parameter']==f].values[0][1]
-                if isinstance(r,float) and np.isnan(r):
+                i0 = col[f].values[0]
+                r = hdr[hdr['Parameter'] == f].values[0][1]
+                if isinstance(r, float) and np.isnan(r):
                     continue
-                d = {col[f].iloc[0]: r}  #ignore warning as doesn't work with iloc or loc
+                d = {col[f].iloc[0]: r}  # ignore warning as doesn't work with iloc or loc
                 col[f].replace(d, inplace=True)
-                msg = f, "=", i0, '[', type(i0), '] updated TO ', col[f].iloc[0],'[', type(col[f].iloc[0]),"]"
+                msg = f, "=", i0, '[', type(i0), '] updated TO ', col[f].iloc[0], '[', type(col[f].iloc[0]), "]"
                 logging.debug(msg)
-                print(msg)
-
         return col
 
-    def writePhasedata(self,f,df_file_data, df_file_results):
+    def writePhasedata(self, f, df_file_data, df_file_results):
         """
         Collate Phase data and append as new tab in datafile
         :param f:
@@ -274,35 +320,37 @@ class CosmedParser():
         writer = None
         try:
             book = load_workbook(f)
-            #Output to file copy
+            # Output to file copy
             fparts = split(f)
-            f0 = join(fparts[0],'processed',fparts[1])
+            f0 = join(fparts[0], 'processed', fparts[1])
             writer = pd.ExcelWriter(f0, engine='openpyxl')
             writer.book = book
             writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-            #Generate data
-            df = df_file_data.drop([0, 1]) #remove empty rows
-            extraphases = ['AT','RC','Max']
-            phases = df['Phase'].unique().tolist() + extraphases #list of phase names
-            #Generate columns for time intervals
-            for n in [3,1]:
-                df['t'+str(n)] = df.apply(lambda t: self.getTimesIntervals(t, n), axis=1)
+            # Generate data
+            df = df_file_data.drop([0, 1])  # remove empty rows
+            extraphases = ['AT', 'RC', 'Max']
+            phases = df['Phase'].unique().tolist() + extraphases  # list of phase names
+            # Generate columns for time intervals
+            for n in [3, 1]:
+                df['t' + str(n)] = df.apply(lambda t: self.getTimesIntervals(t, n), axis=1)
             d3 = df[df['t3'] == True]
-            d1 = df[df['t1']== True]
-            #Generate column for extra - from manual adjustments
+            d1 = df[df['t1'] == True]
+            # Generate column for extra - from manual adjustments
             for ephase in extraphases:
-                df[ephase] = df.apply(lambda t: self.getRowt(t,df_file_results[ephase].iloc[0]),axis=1)
+                df[ephase] = df.apply(lambda t: self.getRowt(t, df_file_results[ephase].iloc[0]), axis=1)
 
             results = dict()
-            cols=[]
+            cols = []
             for phase in phases:
-                if phase =='RECOVERY':
+                if phase == 'NONE':  # ?assume not included
+                    continue
+                if phase == 'RECOVERY':
                     d = d1[d1['Phase'] == phase]
                     colname = phase.title()
-                elif phase in ['AT','RC','Max']:
-                    d = df[df[phase]==True]
-                    du = self.updateRowVal(d, df_file_results[['Parameter',phase]])
-                    print phase, " Updated: ", du
+                elif phase in ['AT', 'RC', 'Max']:
+                    d = df[df[phase] == True]
+                    du = self.updateRowVal(d, df_file_results[['Parameter', phase]])
+                    # logging.debug phase, " Updated: ", du
                     d = du
                     colname = phase
                 else:
@@ -310,40 +358,27 @@ class CosmedParser():
                     colname = phase.title()
                 results[colname] = d[self.fields['Parameter'].tolist()[0:14]].T
                 if len(d) > 1:
-                    cols=cols +[colname + " " +str(c + 1) for c in range(len(d))]
+                    cols = cols + [colname + " " + str(c + 1) for c in range(len(d))]
                 else:
                     cols.append(colname)
 
-            r = pd.concat([results['Rest'], results['Warmup'], results['Exercise'], results['Recovery'], results['AT'], results['RC'], results['Max']], join='inner', axis=1)
-            print "RESULTS:", r
+            r = pd.concat([results['Rest'], results['Warmup'], results['Exercise'], results['Recovery'], results['AT'],
+                           results['RC'], results['Max']], join='inner', axis=1)
+            logging.debug("PHASES RESULTS: %d", len(r))
             r.columns = cols
             r.to_excel(writer, "Phases")
             writer.save()
         except Exception as e:
-            logging.error(e)
+            msg = 'File: %s - %s ' % (f, e)
+            logging.error(msg)
         finally:
-            print('Phase data tab Done')
+            msg = 'Phase data tab DONE for %s' % f
+            logging.info(msg)
+            print(msg)
             # if book is not None:
             #     book.close()
             # if writer is not None:
             #     writer.close()
-
-    def cleandatatypes(self):
-        """
-        ensure correct datatypes for uploading
-        :return:
-        """
-        self.df.fillna('', inplace=True)
-        print self.df.dtypes
-        for field in ['Grade','P Syst', 'P Diast']:
-            self.df[field] = self.df[field].apply(lambda t: self.to_int(t) )
-        print self.df.dtypes
-
-    def to_int(self, t):
-        if t != '':
-            return int(t)
-        else:
-            return t
 
     def sortSubjects(self):
         '''Sort data into subjects by participant ID'''
@@ -354,16 +389,16 @@ class CosmedParser():
             intervals = range(0, 13, 3)
             for sid in ids:
                 self.subjects[sid] = dict()
-                data = self.df[self.df['SubjectID']==sid]
+                data = self.df[self.df['SubjectID'] == sid]
                 for i in intervals:
                     idata = data[data['interval'] == str(i)]
                     if not idata.empty:
-                        self.subjects[sid][i]= idata
+                        self.subjects[sid][i] = idata
 
-                if VERBOSE:
-                    print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
-            print('Subjects loaded=', len(self.subjects))
-
+                logging.debug('Subject: %s with %d datasets', sid, len(self.subjects[sid]))
+            logging.debug('Subjects loaded=%d', len(self.subjects))
+        else:
+            logging.error('Subjects not loaded')
 
     def getSampleid(self, sd, interval):
         """
@@ -385,31 +420,30 @@ class CosmedParser():
         :param row: pandas series row data
         :return: data kwargs structure to load to xnat expt
         """
-        vdate =datetime.strptime(row['date'].iloc[0] + " " + row['time'].iloc[0], '%Y%m%d %I:%M:%S %p')
+        vdate = datetime.strptime(row['date'].iloc[0] + " " + row['time'].iloc[0], '%Y%m%d %I:%M:%S %p')
         mandata = {
             xsd + '/interval': str(i),
-            xsd + '/date' : vdate.strftime("%Y.%m.%d %H:%M:%S"),
+            xsd + '/date': vdate.strftime("%Y.%m.%d %H:%M:%S"),
             xsd + '/sample_id': str(row.index.values[0]),  # row number in this data file for reference
             xsd + '/sample_quality': 'Good',  # default - check later if an error
             xsd + '/data_valid': 'Checked',
-            xsd + '/comments': ''
+            xsd + '/comments': 'Max values'
         }
         motdata = {}
         for i in range(len(self.fields)):
             field = self.fields['Parameter'][i]
             xnatfield = self.fields['XnatField'][i]
             if field in row:
-                d=row[field].iloc[0]
-                if isinstance(d,time):
-                    motdata[xsd + '/' + xnatfield] = str(d.hour * 60 + d.minute + float(d.second)/60)
+                d = row[field].iloc[0]
+                if isinstance(d, time):
+                    motdata[xsd + '/' + xnatfield] = str(d.hour * 60 + d.minute + float(d.second) / 60)
                 elif isinstance(d, datetime):
                     motdata[xsd + '/' + xnatfield] = d.strftime("%Y%m%d")
-                elif isinstance(d,float) and np.isnan(d):
+                elif isinstance(d, float) and np.isnan(d):
                     motdata[xsd + '/' + xnatfield] = ''
                 else:
                     motdata[xsd + '/' + xnatfield] = str(d)
         return (mandata, motdata)
-
 
 
 ########################################################################
@@ -434,8 +468,9 @@ if __name__ == "__main__":
     fieldsfile = args.fields
     print("Input:", inputdir)
     if access(inputdir, R_OK):
-        dp = CosmedParser(inputdir,inputsubdir,datafile,fieldsfile)
-        print(dp.df)
+        dp = CosmedParser(inputdir, inputsubdir, datafile, fieldsfile)
+        if dp.df.empty:
+            raise ValueError("Error during compilation - data not loaded")
         xsd = dp.getxsd()
         dp.sortSubjects()
 
@@ -445,12 +480,11 @@ if __name__ == "__main__":
                 sampleid = dp.getSampleid(sd, i)
                 print 'Sampleid: ', sampleid
                 (mandata, data) = dp.mapData(row, i, xsd)
-                print 'MANDATA: ',mandata
-                print 'DATA: ',data
+                print 'MANDATA: ', mandata
+                print 'DATA: ', data
 
     else:
         print "Cannot access directory: ", inputdir
         inputdir = "..\\..\\" + inputdir
-        if access(inputdir,R_OK):
+        if access(inputdir, R_OK):
             print "But can access this one: ", inputdir
-

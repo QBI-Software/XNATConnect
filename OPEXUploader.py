@@ -321,7 +321,7 @@ if __name__ == "__main__":
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
     parser.add_argument('--dexa', action='store', help='Upload DEXA data from directory')
     parser.add_argument('--cosmed', action='store', help='Upload COSMED data from directory')
-    parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory', default="VO2data_crosschecked")
+    parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory', default="VO2data_crosschecked_20170926")
     parser.add_argument('--cosmed_datafile', action='store', help='COSMED VO2 datafile', default='VO2data_VEVCO2_20171009.xlsx')
 
     args = parser.parse_args()
@@ -590,19 +590,20 @@ if __name__ == "__main__":
                     try:
                         project = uploader.xnat.get_project(projectcode)
                         dp = CosmedParser(inputdir, inputsubdir, datafile, fields)
-                        print(dp.df)
-
-                        (missing, matches) = uploader.uploadData(project, dp)
-                        # Output matches and missing
-                        if len(matches) > 0 or len(missing) > 0:
-                            (out1, out2) = uploader.outputChecks(projectcode,
-                                                                 matches,
-                                                                 missing,
-                                                                 inputdir,
-                                                                 datafile)
-                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                            print(msg)
-                            logging.info(msg)
+                        if dp.df.empty:
+                            raise ValueError('Data error during compilation - not uploaded to XNAT')
+                        else:
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode,
+                                                                     matches,
+                                                                     missing,
+                                                                     inputdir,
+                                                                     datafile)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                print(msg)
+                                logging.info(msg)
 
                     except Exception as e:
                         raise ValueError(e)
