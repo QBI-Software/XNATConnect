@@ -430,6 +430,7 @@ class CosmedParser():
             xsd + '/comments': 'Max values'
         }
         motdata = {}
+        intfields =self.fields['XnatField'][self.fields['Type']=='int']#['rpe', 'grade','sbp','dbp']
         for i in range(len(self.fields)):
             field = self.fields['Parameter'][i]
             xnatfield = self.fields['XnatField'][i]
@@ -441,6 +442,8 @@ class CosmedParser():
                     motdata[xsd + '/' + xnatfield] = d.strftime("%Y%m%d")
                 elif isinstance(d, float) and np.isnan(d):
                     motdata[xsd + '/' + xnatfield] = ''
+                elif isinstance(d,float) and xnatfield in intfields.values:
+                    motdata[xsd + '/' + xnatfield] = str(int(d))
                 else:
                     motdata[xsd + '/' + xnatfield] = str(d)
         return (mandata, motdata)
