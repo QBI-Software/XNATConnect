@@ -17,11 +17,13 @@ from os import R_OK, access
 from os.path import join, basename, splitext
 
 import pandas
+import logging
 
 
 class DataParser(object):
     def __init__(self, datafile, sheet=0,skiplines=0, header=None):
         self.datafile = datafile #full pathname to data file
+        self.incorrect = pandas.read_csv(join('sampledata', 'incorrectIds.csv'))
         if (datafile is not None and len(datafile)> 0):
             (bname, extn)= splitext(basename(datafile))
             self.type = extn #extension - xlsx or csv
@@ -29,6 +31,16 @@ class DataParser(object):
             self.skiplines = skiplines
             self.header = header
             self._loadData()
+
+    def __checkSID(self,sid):
+        rsid = sid
+        if not self.incorrect.empty:
+            r = self.incorrect[self.incorrect.INCORRECT == sid]
+            if not r.empty:
+                rsid = r.CORRECT.values[0]
+                msg ='Subject: %s corrected to %s' % (sid,rsid)
+                logging.warning(msg)
+        return rsid
 
     def _loadData(self):
         if self.type =='.xlsx' or self.type == '.xls':

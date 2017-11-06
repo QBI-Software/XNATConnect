@@ -60,10 +60,11 @@ class DexaParser(DataParser):
             sids = self.df[0]['SubjectID'].unique()
             ids = [i for i in sids if len(i) == 6]
             for sid in ids:
-                self.subjects[sid] = dict()
+                sidkey = self._DataParser__checkSID(sid)
+                self.subjects[sidkey] = dict()
                 for i, intval in self.intervals.items():
                     data = self.df[i]
-                    self.subjects[sid][i]= data[data['SubjectID'] == sid]
+                    self.subjects[sidkey][i]= data[data['SubjectID'] == sid]
                 if VERBOSE:
                     print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
@@ -119,7 +120,7 @@ if __name__ == "__main__":
     parser.add_argument('--sheet', action='store', help='Sheet name to extract',
                         default="0")
     parser.add_argument('--fields', action='store', help='Fields to extract',
-                        default="..\\..\\resources\\dexa_fields.xlsx")
+                        default="resources\\dexa_fields.xlsx")
     args = parser.parse_args()
 
     inputdir = args.filedir

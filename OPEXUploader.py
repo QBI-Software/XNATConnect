@@ -71,7 +71,6 @@ class OPEXUploader():
             update = self.args.update
         else:
             update = False
-
         if not expt.exists() or update:
             self.xnat.createExperiment(subject, samplexsd, sampleid, mandata,sampledata)
             msg = 'Experiment created:' + sampleid
@@ -162,6 +161,7 @@ class OPEXUploader():
                         row.replace(np.nan, '', inplace=True)
                         sampleid = dp.getSampleid(sd,i)
                         (mandata, data) = dp.mapData(row, i, xsdtypes)
+
                         msg = self.loadSampledata(s, xsdtypes, sampleid, mandata, data)
                         logging.info(msg)
                         print(msg)

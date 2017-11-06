@@ -17,9 +17,10 @@ import wx.xrc
 class UploaderGUI ( wx.Frame ):
 	
 	def __init__( self, parent ):
-		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"XNAT Uploader", pos = wx.DefaultPosition, size = wx.Size( 500,420 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"XNAT Uploader", pos = wx.DefaultPosition, size = wx.Size( 700,750 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
 		
 		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+		self.SetBackgroundColour( wx.Colour( 244, 254, 255 ) )
 		
 		bSizer1 = wx.BoxSizer( wx.VERTICAL )
 		
@@ -56,7 +57,7 @@ class UploaderGUI ( wx.Frame ):
 		
 		bSizer2 = wx.BoxSizer( wx.HORIZONTAL )
 		
-		self.inputedit = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), 0 )
+		self.inputedit = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 300,-1 ), 0 )
 		bSizer2.Add( self.inputedit, 0, wx.ALL, 5 )
 		
 		self.btnInputdir = wx.Button( self, wx.ID_ANY, u"Browse", wx.DefaultPosition, wx.DefaultSize, 0 )
@@ -70,7 +71,7 @@ class UploaderGUI ( wx.Frame ):
 		fgSizer2.Add( self.m_staticText5, 0, wx.ALL, 5 )
 		
 		chOptionsChoices = []
-		self.chOptions = wx.ComboBox( self, wx.ID_ANY, u"Select data", wx.DefaultPosition, wx.DefaultSize, chOptionsChoices, 0 )
+		self.chOptions = wx.ComboBox( self, wx.ID_ANY, u"Select data", wx.DefaultPosition, wx.Size( 200,-1 ), chOptionsChoices, 0 )
 		fgSizer2.Add( self.chOptions, 0, wx.ALL, 5 )
 		
 		self.cbCreateSubject = wx.CheckBox( self, wx.ID_ANY, u"Create Subjects from data", wx.DefaultPosition, wx.DefaultSize, 0 )
@@ -90,7 +91,7 @@ class UploaderGUI ( wx.Frame ):
 		
 		bSizer3 = wx.BoxSizer( wx.VERTICAL )
 		
-		self.tcResults = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 400,100 ), wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP|wx.SIMPLE_BORDER )
+		self.tcResults = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 400,300 ), wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP|wx.SIMPLE_BORDER )
 		bSizer3.Add( self.tcResults, 0, wx.ALL|wx.EXPAND, 5 )
 		
 		bSizer4 = wx.BoxSizer( wx.HORIZONTAL )

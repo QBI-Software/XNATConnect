@@ -152,10 +152,9 @@ class XnatConnector:
         """
         expt = None
         if subject is not None:
-            #expt = subject.experiment(exptid).create(experiments=xsdtype) #doesn't work if have 'required' fields
             mandata['experiments'] = xsdtype
             mandata['ID']= exptid
-
+            logging.debug(mandata)
             if xsdtype + '/date' in mandata:
                 vdate = mandata[xsdtype + '/date']
                 if "-" in vdate:
@@ -169,6 +168,9 @@ class XnatConnector:
             expt_creation_time = expt_creation.strftime("%H:%M:%S")
             #create with mandatory data
             expt = subject.experiment(exptid).create(**mandata)
+            if not expt.exists():
+                msg = 'Cannot create expt: %s' % exptid
+                raise ValueError(msg)
             # Add attributes as other fields
             expt.attrs.set('xnat:experimentData/date', expt_creation_date)
             expt.attrs.set('xnat:experimentData/time', expt_creation_time)

@@ -68,7 +68,8 @@ class OPEXReport(object):
                   ('MR Sessions', 6),
                   ('MRI ASHS', 6),
                   ('MRI FS', 6),
-                  ('DEXA',3)]
+                  ('DEXA',3),
+                  ('COSMED',3)]
         od = OrderedDict(fields)
         return od
 
@@ -81,19 +82,21 @@ class OPEXReport(object):
                   ('CANTAB MOT', 'opex:cantabMOT'),
                   ('CANTAB PAL', 'opex:cantabPAL'),
                   ('CANTAB SWM', 'opex:cantabSWM'),
-                  ('VWM', 'opex:amunet'),
-                  ('PSQI', 'opex:psqi'),
-                  ('DASS', 'opex:dass'),
-                  ('IPAQ', 'opex:ipaq'),
-                  ('Insomnia', 'opex:insomnia'),
-                  ('Godin', 'opex:godin'),
                   ('COBAS', 'opex:bloodCobasData'),
                   ('ELISAS', 'opex:bloodElisasData'),
                   ('MULTIPLEX', 'opex:bloodMultiplexData'),
                   ('MR Sessions', 'xnat:mrSessionData'),
                   ('MRI ASHS', 'opex:mriashs'),
                   ('MRI FS', 'opex:mrifs'),
-                  ('DEXA','opex:dexa')]
+                  ('DEXA','opex:dexa'),
+                  ('COSMED', 'opex:cosmed'),
+                  ('VWM', 'opex:amunet'),
+                  ('PSQI', 'opex:psqi'),
+                  ('DASS', 'opex:dass'),
+                  ('IPAQ', 'opex:ipaq'),
+                  ('Insomnia', 'opex:insomnia'),
+                  ('Godin', 'opex:godin')
+                  ]
         od = OrderedDict(fields)
         return od
 
