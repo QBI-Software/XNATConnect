@@ -6,7 +6,7 @@ import wx
 import subprocess
 from os.path import isdir, join, expanduser
 from os import access, R_OK, walk, mkdir
-from qbixnat.gui.noname import UploaderGUI
+from qbixnat.gui.noname import UploaderGUI, dlgScans
 from configobj import ConfigObj
 
 
@@ -17,7 +17,7 @@ class OPEXUploaderGUI(UploaderGUI):
         :param parent:
         """
         super(OPEXUploaderGUI, self).__init__(parent)
-        self.runoptions = ['Help']
+        self.runoptions = {'Help':'--h'}
         self.configfile = join(expanduser('~'), '.xnat.cfg')
         self.loaded = self.__loadConfig()
         if self.loaded:
@@ -34,11 +34,21 @@ class OPEXUploaderGUI(UploaderGUI):
         else:
             raise IOError("Config file not accessible: %s", self.configfile)
 
-        return False
 
-    def __loadCommand(self, options):
+    def __loadCommand(self, options, report=0):
+        """
+        Load command for several scripts
+        :param options:
+        :param report:
+        :return:
+        """
         s = " "
-        cwd = join(os.getcwd(), "OPEXUploader.py")
+        if report == 1:
+            cwd = join(os.getcwd(), "qbixnat","report","OPEXReport.py")
+        elif report == 2:
+            cwd = join(os.getcwd(), "XnatOrganizeFiles.py")
+        else:
+            cwd = join(os.getcwd(), "OPEXUploader.py")
         if ('PYTHONEXE' in os.environ):
             pythoncmd = os.environ('PYTHONEXE')
         else:
@@ -97,6 +107,51 @@ class OPEXUploaderGUI(UploaderGUI):
             print >> sys.stderr, msg
             self.tcResults.AppendText(msg)
 
+    def OnLaunch( self, event ):
+        """
+        Dialog for XnatScans organizer
+        :param event:
+        :return:
+        """
+        dlg = dlgScans(self)
+        if dlg.ShowModal() == wx.ID_OK:
+            scaninput = dlg.txtInputScans.GetPath()
+            scanoutput = dlg.txtOutputScans.GetPath()
+            ignore = dlg.txtIgnoreScans.GetPath()
+            opexid = dlg.chkOPEX.GetValue()
+            if len(scaninput)<=0 or len(scanoutput) <=0:
+                dlg = wx.MessageDialog(self, "Please specify data directories", "Scan organizer", wx.OK)
+                dlg.ShowModal()  # Show it
+                dlg.Destroy()
+            else:
+                runoptions = ['--scandir','"'+scanoutput+'"']
+                if opexid:
+                    runoptions.append('--opexid')
+                if len(ignore) > 0:
+                    runoptions.append('--ignore')
+                    runoptions.append('"'+ignore+'"')
+                #compile options
+                options = ['"'+scaninput+'"', " ".join(runoptions)]
+                cmd = self.__loadCommand(options, 2)
+                self.tcResults.AppendText(cmd)
+                self.tcResults.AppendText("\n*******\n")
+                try:
+                    output = subprocess.check_output(cmd, shell=True)
+                    self.tcResults.AppendText(output)
+                    self.tcResults.AppendText("\n***FINISHED***\n")
+                except subprocess.CalledProcessError as e:
+                    retcode = e.returncode
+                    if retcode < 0:
+                        msg = "Program was terminated by signal [" + str(retcode) + "]"
+                        print >> sys.stderr, msg
+                    elif retcode == 1:
+                        msg = "Program ran successfully [" + str(retcode) + "]"
+                        print >> sys.stderr, msg
+                    else:
+                        msg = "Program error [" + str(retcode) + "] - check output"
+                        print >> sys.stderr, msg
+                    self.tcResults.AppendText(msg)
+
     def OnClose(self, e):
         self.Close(True)  # Close the frame.
 
@@ -114,6 +169,41 @@ class OPEXUploaderGUI(UploaderGUI):
         self.dirname = '"{0}"'.format(event.GetString())
         #self.StatusBar.SetStatusText("Input dir: %s\n" % self.dirname)
 
+    def OnDownload( self, event ):
+        """
+        Run downloads
+        :param event:
+        :return:
+        """
+        if self.dirname is None or len(self.dirname) <=0:
+            dlg = wx.MessageDialog(self, "Please specify output directory", "OPEX Report", wx.OK)
+            dlg.ShowModal()  # Show it
+            dlg.Destroy()
+        else:
+            runoption =['--output', self.dirname]
+            (db, proj) = self.__loadConnection()
+            if db is None:
+                return 0
+            options = [db, proj, " ".join(runoption) ]
+            cmd = self.__loadCommand(options, 1)
+            self.tcResults.AppendText(cmd)
+            self.tcResults.AppendText("\n*******\n")
+            try:
+                output = subprocess.check_output(cmd, shell=True)
+                self.tcResults.AppendText(output)
+                self.tcResults.AppendText("\n***FINISHED***\n")
+            except subprocess.CalledProcessError as e:
+                retcode = e.returncode
+                if retcode < 0:
+                    msg = "Program was terminated by signal [" + str(retcode) + "]"
+                    print >> sys.stderr, msg
+                elif retcode == 1:
+                    msg = "Program ran successfully [" + str(retcode) + "]"
+                    print >> sys.stderr, msg
+                else:
+                    msg = "Program error [" + str(retcode) + "] - check output"
+                    print >> sys.stderr, msg
+                self.tcResults.AppendText(msg)
 
     def OnSubmit(self,event):
         """
@@ -151,6 +241,7 @@ class OPEXUploaderGUI(UploaderGUI):
             try:
                 output = subprocess.check_output(cmd, shell=True)
                 self.tcResults.AppendText(output)
+                self.tcResults.AppendText("\n***FINISHED***\n")
 
             except subprocess.CalledProcessError as e:
                 retcode = e.returncode

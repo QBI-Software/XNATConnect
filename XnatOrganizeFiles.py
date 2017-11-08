@@ -18,7 +18,8 @@ import glob
 import shutil
 import dicom
 from dicom.filereader import InvalidDicomError, read_file
-
+import logging
+logging.basicConfig(filename='xnatscans.log', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
 
 if __name__ == "__main__":
     # Read dirlist until get to *.dcm or *.IMA
@@ -35,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('inputdir', action='store', help='Top level file directory eg SUBJECTID')
     parser.add_argument('--scandir', action='store', help='Copy scans to this directory for upload to XNAT')
     parser.add_argument('--opexid', action='store_true', help='SUBJECTID directories in OPEX format eg 1001DS')
+    parser.add_argument('--ignore', action='store', help='')
     args = parser.parse_args()
     series ={}
     #pattern = '^([0-9A-Z_\.]+)(\d{4})\..*'
@@ -56,19 +58,36 @@ if __name__ == "__main__":
         pattern = re.compile('^\d{4}[A-Za-z0-9]+$')
     else:
         pattern = re.compile('[A-Za-z0-9\_\.\-]+')
-
+    #Ignore these directories already processed - allows for repeated parsing over same dir
+    if args.ignore is not None and args.ignore:
+        ignorefiles = listdir(args.ignore)
+        msg = 'Ignoring %d files in %s' % (len(ignorefiles), args.ignore)
+        print msg
+        logging.info(msg)
+    else:
+        ignorefiles=[]
     #Create MRI sessions for each subject directory
     for subject in listdir(inputdir):
-        print "Subject: ", subject
-        if not pattern.match(subject):
-            print "Not a subject - next"
+        msg = "Subject: %s" % subject
+        logging.info(msg)
+        print msg
+        if args.opexid is not None and args.opexid and len(subject) == 8:
+            trimsubject = subject[0:6]
+        else:
+            trimsubject=subject
+        if not pattern.match(subject) or subject in ignorefiles or trimsubject in ignorefiles:
+            msg= "Not a subject or marked for ignore - next"
+            logging.warning(msg)
+            print msg
             continue
         try:
             mkdir(join(datapath, subject))
             mkdir(join(datapath,subject,'scans'))
             datapath = join(datapath,subject,'scans')
         except OSError:
-            print 'Directory exists: ', join(datapath, subject)
+            msg = 'Directory exists: %s' % join(datapath, subject)
+            logging.info(msg)
+            print msg
             datapath = origdatapath
             continue
         for group in listdir(join(inputdir,subject)):
@@ -80,7 +99,9 @@ if __name__ == "__main__":
                 try:
                     dcm = dicom.read_file(join(grouppath,filename))
                 except InvalidDicomError:
-                    print "Not DICOM - skipping: ", filename
+                    msg = "Not DICOM - skipping: %s" % filename
+                    logging.warning(msg)
+                    print msg
                     continue
                 series_num = str(dcm.SeriesNumber)
                 if series_num not in series:
@@ -98,13 +119,17 @@ if __name__ == "__main__":
                     for f2 in files:
                         shutil.copy(f2, dpath[0])
                 except:
-                    print "Error copying files: ", dpath
+                    msg = "Error copying files: %s" % dpath
+                    logging.error(msg)
+                    print msg
                     break
                     #raise OSError
 
             series={}
 
-        print "Files sorted to dir: ", datapath
+        msg = "Files sorted to dir: %s" % datapath
+        logging.info(msg)
+        print msg
         datapath = origdatapath
 
 

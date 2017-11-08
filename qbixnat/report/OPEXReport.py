@@ -33,6 +33,7 @@ class OPEXReport(object):
         self.minmth = 0
         self.maxmth = 12
         self.cache = csvfile
+        self.xnat = None
         self.exptintervals = self.__experiments()
         if csvfile is not None:
             self.data = pandas.read_csv(csvfile)
@@ -184,7 +185,7 @@ class OPEXReport(object):
     def getExptCounts(self, projectcode):
         dfsubjects = None
         if self.xnat is not None:
-            df_counts = self.xnat.getOPEXExpts(projectcode)
+            df_counts = self.getOPEXExpts(projectcode)
             # Get first visit as starting point in study
             v0 = df_counts.filter(regex="_visit", axis=1)
             v = v0.replace(['',np.nan], 'ZZZZZZZ')
@@ -196,6 +197,58 @@ class OPEXReport(object):
             print("Load counts from file")  # TODO
 
         return dfsubjects
+
+    def getOPEXExpts(self,projectcode,headers=None):
+        """
+        Get Expt data to parse
+        :return:
+        """
+        etypes = sorted(self.xnat.conn.inspect.datatypes())
+        df_subjects = self.xnat.getSubjectsDataframe(projectcode)
+        # Cannot load all at once nor can get count directly so loop through each datatype and compile counts
+        for etype in etypes:
+            print "Expt type:", etype
+            if etype.startswith('opex'):
+                #fields = self.conn.inspect.datatypes(etype)
+                columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL',etype + '/DATA_VALID',etype + '/SAMPLE_QUALITY']
+                criteria = [(etype + '/SUBJECT_ID', 'LIKE', '*'), 'AND']
+                df_dates = self.xnat.getSubjectsDataframe(projectcode, etype, columns, criteria)
+                if df_dates is not None:
+                    aggreg = {'subject_id': {etype:'count'}, 'date': {etype+'_date': 'min'}}
+                    df_counts = df_dates.groupby('subject_id').agg(aggreg).reset_index()
+                    df_counts.columns = df_counts.index.droplevel(level=0)
+                    df_counts.columns = ['subject_id', etype + '_visit', etype]
+                    df_subjects = df_subjects.merge(df_counts, how='left', on='subject_id')
+                    print len(df_subjects)
+
+        print(df_subjects.head())
+
+        return df_subjects
+
+    def downloadOPEXExpts(self,projectcode, outputdir):
+        '''
+        CSV downloads for each expt type
+        :param projectcode:
+        :return:
+        '''
+        etypes = sorted(self.xnat.conn.inspect.datatypes())
+        columns = ['xnat:subjectData/SUBJECT_LABEL', 'xnat:subjectData/SUB_GROUP',
+                   'xnat:subjectData/GENDER_TEXT', 'xnat:subjectData/DOB']
+        for etype in etypes:
+            print "Expt type:", etype
+            if etype.startswith('opex'):
+                fields = self.xnat.conn.inspect.datatypes(etype)
+                fields = columns + fields
+                #print(fields)
+                criteria = [(etype + '/SUBJECT_ID', 'LIKE', '*'), 'AND']
+                df_expts = self.xnat.getSubjectsDataframe(projectcode, etype, fields, criteria)
+                if df_expts is not None:
+                    print('Expts:', len(df_expts))
+                    outputname = etype.replace(":", "_") + ".csv"
+                    df_expts.to_csv(join(outputdir,outputname), index=False)
+                else:
+                    print('No data')
+
 
     def formatCounts(self, df_counts):
         """
@@ -324,6 +377,7 @@ if __name__ == "__main__":
     parser.add_argument('database', action='store', help='select database config from xnat.cfg to connect to')
     parser.add_argument('projectcode', action='store', help='select project by code')
     parser.add_argument('--cache', action='store', help='use a downloaded csv file - no connection')
+    parser.add_argument('--output', action='store', help='output directory for csv files')
     args = parser.parse_args()
     if (args.cache is not None):
         try:
@@ -359,7 +413,13 @@ if __name__ == "__main__":
             op.xnat = xnat
             df = op.getParticipants()
             print df
-            op.printMissingExpts(projectcode)
+            #Download CSV files: DO NOT CHANGE - Hooked up from GUI
+            if args.output is not None and args.output:
+                outputdir = args.output
+                op.downloadOPEXExpts(projectcode=projectcode, outputdir=outputdir)
+            #Dash report test - can change
+            else:
+                op.printMissingExpts(projectcode)
 
             # MULTIPROCESSING REQUIRED
             #

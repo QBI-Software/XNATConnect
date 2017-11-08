@@ -240,33 +240,6 @@ class XnatConnector:
             df_subjects = None
         return df_subjects
 
-    def getOPEXExpts(self,projectcode,headers=None):
-        """
-        Get Expt data to parse
-        :return:
-        """
-        etypes = sorted(self.conn.inspect.datatypes())
-        df_subjects = self.getSubjectsDataframe(projectcode)
-        # Cannot load all at once nor can get count directly so loop through each datatype and compile counts
-        for etype in etypes:
-            print "Expt type:", etype
-            if etype.startswith('opex'):
-                #fields = self.conn.inspect.datatypes(etype)
-                columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL',etype + '/DATA_VALID',etype + '/SAMPLE_QUALITY']
-                criteria = [(etype + '/SUBJECT_ID', 'LIKE', '*'), 'AND']
-                df_dates = self.getSubjectsDataframe(projectcode, etype, columns, criteria)
-                if df_dates is not None:
-                    aggreg = {'subject_id': {etype:'count'}, 'date': {etype+'_date': 'min'}}
-                    df_counts = df_dates.groupby('subject_id').agg(aggreg).reset_index()
-                    df_counts.columns = df_counts.columns.droplevel(level=0)
-                    df_counts.columns = ['subject_id', etype + '_visit', etype]
-                    df_subjects = df_subjects.merge(df_counts, how='left', on='subject_id')
-                    print len(df_subjects)
-
-        print(df_subjects.head())
-
-        return df_subjects
-
 
     def upload_MRIscans(self, projectcode, scandir, opexid=False):
         """
