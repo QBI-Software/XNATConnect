@@ -76,7 +76,7 @@ class OPEXUploaderGUI(UploaderGUI):
 
     def OnHelp(self,e):
         self.tcResults.Clear()
-        cmd = self.__loadCommand(['-x'])
+        cmd = self.__loadCommand(['--h'])
         try:
             output = subprocess.check_output(cmd, shell=True)
             self.tcResults.AppendText(output)
