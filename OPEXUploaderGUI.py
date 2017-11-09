@@ -17,7 +17,7 @@ class OPEXUploaderGUI(UploaderGUI):
         :param parent:
         """
         super(OPEXUploaderGUI, self).__init__(parent)
-        self.runoptions = {'Help':'--h'}
+        self.runoptions = self.__loadOptions()
         self.configfile = join(expanduser('~'), '.xnat.cfg')
         self.loaded = self.__loadConfig()
         if self.loaded:
@@ -28,12 +28,19 @@ class OPEXUploaderGUI(UploaderGUI):
         if self.configfile is not None and access(self.configfile, R_OK):
             print("Loading config file")
             config = ConfigObj(self.configfile, encoding='UTF-8')
-            if 'options' in config:
-                self.runoptions = config['options']
+
             return True
         else:
             raise IOError("Config file not accessible: %s", self.configfile)
 
+    def __loadOptions(self):
+        optionsfile = join('resources','run_options.cfg')
+        config = ConfigObj(optionsfile)
+        if 'options' in config:
+            runoptions = config['options']
+        else:
+            runoptions = {'Help':'--h'}
+        return runoptions
 
     def __loadCommand(self, options, report=0):
         """
