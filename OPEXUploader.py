@@ -160,6 +160,8 @@ class OPEXUploader():
                     for i, row in dp.subjects[sd].items():
                         row.replace(np.nan, '', inplace=True)
                         sampleid = dp.getSampleid(sd,i)
+                        if sampleid in ['COS_1021LB_0','COS_1021LB_3']:
+                            continue
                         (mandata, data) = dp.mapData(row, i, xsdtypes)
 
                         msg = self.loadSampledata(s, xsdtypes, sampleid, mandata, data)
