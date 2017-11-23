@@ -108,14 +108,16 @@ class OPEXReportApp(object):
         }
         return colors
 
-    def tablecell(self,val):
-        mycolors = list(['#fafad2','#eee8aa','#ffff00','#ffa500','#ff8c00','#ff7f50','#f08080','#ff6347','#ff4500','#ff0000'])
+    def tablecell(self,val, col):
+        mycolors = list(['#F0F8FF','#E6E6FA','#B0E0E6','#ADD8E6','#87CEFA','#1E90FF','#6495ED','#4682B4','#5F9EA0','#4169E1','#00008B'])
 
         if type(val) != str:
             val = int(val)
-            if val <= 0:
+            if val <= 0 and col != 'MONTH':
                 return html.Td([html.Span(className="glyphicon glyphicon-ok")],
                                className="btn-success")
+            # elif col =='Subject':
+            #     return html.Td([html.A(val,href='https://opex.qbi.uq.edu.au:8443/app/action/QuickSearchAction#LINKxnat:subjectData_P1' )])
             else:
                 valcolor = val % len(mycolors)
                 return html.Td([html.Span(val)], style={'color':'black','background-color': mycolors[valcolor]})
@@ -130,7 +132,7 @@ class OPEXReportApp(object):
 
             # Body
             [html.Tr([
-                self.tablecell(dataframe.iloc[i][col]) for col in dataframe.columns
+                self.tablecell(dataframe.iloc[i][col], col) for col in dataframe.columns
             ]) for i in range(min(len(dataframe), max_rows))]
             ,
             className='table',

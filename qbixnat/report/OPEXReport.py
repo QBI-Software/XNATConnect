@@ -216,7 +216,7 @@ class OPEXReport(object):
                 if df_dates is not None:
                     aggreg = {'subject_id': {etype:'count'}, 'date': {etype+'_date': 'min'}}
                     df_counts = df_dates.groupby('subject_id').agg(aggreg).reset_index()
-                    df_counts.columns = df_counts.index.droplevel(level=0)
+                    #df_counts.columns = df_counts.index.droplevel(level=0)
                     df_counts.columns = ['subject_id', etype + '_visit', etype]
                     df_subjects = df_subjects.merge(df_counts, how='left', on='subject_id')
                     print len(df_subjects)
