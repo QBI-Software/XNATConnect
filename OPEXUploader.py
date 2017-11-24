@@ -8,7 +8,7 @@ import sys
 from datetime import date
 from os import R_OK, access
 from os.path import expanduser
-from os.path import isdir, join
+from os.path import isdir, join, basename
 
 import numpy as np
 import pandas
@@ -405,11 +405,16 @@ if __name__ == "__main__":
                     msg = "Access to data directory is denied: %s" % inputdir
                     raise ConnectionError(msg)
             ### Upload Amunet data from directory
+            # Files are in 2 parts and do not contain interval or visit date so should be separated into folders:
+            # 0m, 3m, 6m, 9m
+            # Dates are generated separately below from the raw folders TODO: incorporate into this function - path given in "folderpath.txt"
+            # csv files with dates should be placed in the same directory to be loaded with sortSubjects
             if (uploader.args.amunet is not None and uploader.args.amunet):
-                sheet = "1"
+                sheet = 0
                 inputdir = uploader.args.amunet
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
+                    interval = basename(inputdir)[0]
                     seriespattern = '*.*'
                     try:
                         files = glob.glob(join(inputdir, seriespattern))
@@ -419,6 +424,7 @@ if __name__ == "__main__":
                             print("Loading", f2)
                             dp = AmunetParser(f2, sheet)
                             #dp.extractDateInfo(uploader.args.amunetpath)
+                            dp.interval = interval
                             (missing, matches) = uploader.uploadData(project, dp)
                             # Output matches and missing
                             if len(matches) > 0 or len(missing) > 0:

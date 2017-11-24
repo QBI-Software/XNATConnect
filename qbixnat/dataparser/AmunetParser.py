@@ -18,7 +18,7 @@ import re
 import sys
 from datetime import date
 from os import listdir, R_OK, access
-from os.path import join, isfile
+from os.path import join, isfile, split
 
 import pandas
 
@@ -37,11 +37,25 @@ class AmunetParser(DataParser):
         '''Sort data into subjects by participant ID'''
         if self.data is not None:
             ids = self.data['S_Full name'].unique()
+            #Load extra info from dir name and generated participant dates
+            if self.interval is not None:
+                self.data['Visit'] = self.data.apply(lambda x: self.interval, axis=1)
+                pdatefile =self.interval + 'm_amunet_participantdates.csv'
+                self.inputdir = split(self.datafile)[0]
+                pdates = pandas.read_csv(join(self.inputdir,pdatefile), header=None)
+                pdates.columns = ['subject', 'visit']
+                self.data['Date'] = self.data.apply(lambda x: self.getRowvisit(x,pdates), axis=1)
             for sid in ids:
                 self.subjects[sid] = self.data[self.data['S_Full name'] == sid]
                 if VERBOSE:
                     print('Subject:', sid, 'with datasets=', len(self.subjects[sid]))
             print('Subjects loaded=', len(self.subjects))
+
+    def getRowvisit(self,row,pdates):
+        d = pdates['visit'][pdates['subject']==row['S_Full name']]
+        if d is None or d.empty:
+            d = ''
+        return d.values[0]
 
     def getxsd(self):
         return 'opex:amunet'
