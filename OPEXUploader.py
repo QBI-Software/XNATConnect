@@ -6,10 +6,9 @@ import os
 import re
 import sys
 from datetime import date
-from os import R_OK, access
-from os.path import expanduser
-from os.path import isdir, join, basename
-
+from os import R_OK, access,listdir
+from os.path import expanduser,isdir, join, basename
+import shutil
 import numpy as np
 import pandas
 from requests.exceptions import ConnectionError
@@ -295,6 +294,25 @@ class OPEXUploader():
         print "Loaded:", len(participantdates)
         return participantdates
 
+    def generateAmunetdates(self, dirpath, filename, interval):
+        if access(dirpath, R_OK):
+            pdates = uploader.extractDateInfo(dirpath, ext='zip')
+            # Output to a csvfile
+            csvfile = join(dirpath, interval + 'm_' + filename)
+            try:
+                with open(csvfile, 'wb') as f:
+                    writer = csv.writer(f)
+                    for d in pdates:
+                        vdates = pandas.Series(pdates[d])
+                        vdates = vdates.unique()
+                        writer.writerow([d, ",".join([v.isoformat() for v in vdates])])
+                    print("Participant dates written to: ", csvfile)
+            except IOError as e:
+                logging.error("Unable to access file for writing: ", e)
+                print e
+            finally:
+                print("Finished")
+                return csvfile
 
 ########################################################################
 if __name__ == "__main__":
@@ -411,52 +429,59 @@ if __name__ == "__main__":
             # csv files with dates should be placed in the same directory to be loaded with sortSubjects
             if (uploader.args.amunet is not None and uploader.args.amunet):
                 sheet = 0
-                inputdir = uploader.args.amunet
-                print("Input:", inputdir)
-                if access(inputdir, R_OK):
-                    interval = basename(inputdir)[0]
-                    seriespattern = '*.*'
-                    try:
-                        files = glob.glob(join(inputdir, seriespattern))
-                        print("Files:", len(files))
-                        project = uploader.xnat.get_project(projectcode)
-                        for f2 in files:
-                            print("Loading", f2)
-                            dp = AmunetParser(f2, sheet)
-                            #dp.extractDateInfo(uploader.args.amunetpath)
-                            dp.interval = interval
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
+                topinputdir = uploader.args.amunet
+                basedatesfile = 'amunet_participantdates.csv'
+                seriespattern = '*.xlsx'
+                print("Input:", topinputdir)
+                if access(topinputdir, R_OK):
+                    subdirs = listdir(topinputdir)
+                    for inputdir in subdirs:
+                        if inputdir not in ['0m', '3m', '6m', '9m']:
+                            continue
+                        interval = inputdir[0]
+                        inputdir = join(topinputdir,inputdir)
 
-                    except:
-                        e = sys.exc_info()[0]
-                        raise ValueError(e)
+                        try:
+                            #Get dates from zip files
+                            dates_uri_file = join(inputdir, 'folderpath.txt')
+                            with open(dates_uri_file, "r") as dd:
+                                content = dd.readlines()
+                                for line in content:
+                                    dates_uri = line.strip()
+                                    break
+                            if len(dates_uri) <=0:
+                                raise ValueError('No dates file found - exiting')
+                            dates_csv = uploader.generateAmunetdates(dates_uri,basedatesfile, interval)
+                            #copy file to this dir
+                            shutil.copyfile(dates_csv, join(inputdir,basename(dates_csv)))
+                            #Get xls files
+                            files = glob.glob(join(inputdir, seriespattern))
+                            print("Files:", len(files))
+                            project = uploader.xnat.get_project(projectcode)
+                            for f2 in files:
+                                print("Loading", f2)
+                                dp = AmunetParser(f2, sheet)
+                                #dp.extractDateInfo(uploader.args.amunetpath)
+                                dp.interval = interval
+                                (missing, matches) = uploader.uploadData(project, dp)
+                                # Output matches and missing
+                                if len(matches) > 0 or len(missing) > 0:
+                                    (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                                    msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                    print(msg)
+                                    logging.info(msg)
+
+                        except ValueError as e:
+                            raise e
+                        except:
+                            e = sys.exc_info()[0]
+                            raise ValueError(e)
                 else:
                     raise IOError("Input dir error")
             if (uploader.args.amunetdates is not None and uploader.args.amunetdates):
                 dirpath = uploader.args.amunetdates
-                if access(dirpath, R_OK):
-                    pdates = uploader.extractDateInfo(dirpath, ext='zip')
-                    # Output to a csvfile
-                    csvfile = join(dirpath, 'amunet_participantdates.csv')
-                    try:
-                        with open(csvfile, 'wb') as f:
-                            writer = csv.writer(f)
-                            for d in pdates:
-                                vdates = pandas.Series(pdates[d])
-                                vdates = vdates.unique()
-                                writer.writerow([d, ",".join([v.isoformat() for v in vdates])])
-                            print("Participant dates written to: ", csvfile)
-                    except IOError as e:
-                        logging.error("Unable to access file for writing: ", e)
-                        print e
-                    finally:
-                        print("Finished")
+                basedatesfile = 'amunet_participantdates.csv'
+                uploader.generateAmunetdates(dirpath, basedatesfile, interval)
                         #writer.close()
 
             ### Upload ACE-R data from directory

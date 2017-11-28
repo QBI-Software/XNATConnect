@@ -54,8 +54,10 @@ class AmunetParser(DataParser):
     def getRowvisit(self,row,pdates):
         d = pdates['visit'][pdates['subject']==row['S_Full name']]
         if d is None or d.empty:
-            d = ''
-        return d.values[0]
+            rtn = ''
+        else:
+            rtn =d.values[0]
+        return rtn
 
     def getxsd(self):
         return 'opex:amunet'
