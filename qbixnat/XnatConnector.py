@@ -190,6 +190,40 @@ class XnatConnector:
             label = prefix + "_" + str(c)
         return label
 
+    def updateExptDate(self,projectcode,exptid,exptdate, dsitype):
+        """
+        Update existing experiment date
+        :param projectcode:
+        :param exptid:
+        :param exptdate:
+        :param dsitype:
+        :return:
+        """
+        project = self.get_project(projectcode)
+        expt = project.experiment(exptid)
+
+        if not expt.exists():
+            #check for similar but difnt counter
+            expts = project.experiments(exptid[0:-1]+'*')
+            expt = expts.fetchone()
+            if expt is None or not expt.exists():
+                print "Expt not found: ", exptid
+                return None
+
+        #format date
+        if not isinstance(exptdate, datetime.datetime):
+            exptdate = datetime.datetime.strptime(exptdate, "%Y-%m-%d %H:%M:%S")
+        edate = expt.attrs.get('xnat:experimentData/date')
+        if edate != exptdate.strftime("%Y-%m-%d"):
+            expt.attrs.set('xnat:experimentData/date', exptdate.strftime("%Y%m%d"))
+            expt.attrs.set('xnat:experimentData/time', exptdate.strftime("%H:%M:%S"))
+            print "Updated experiment date: ", expt.id()
+            return expt
+        else:
+            return None
+
+
+
     def changeExptLabel(self,projectcode, oldlabel, newlabel):
         """
         Change label for an experiment - currently OPEX

@@ -21,6 +21,7 @@ from qbixnat.dataparser.CantabParser import CantabParser
 from qbixnat.dataparser.DexaParser import DexaParser
 from qbixnat.dataparser.MridataParser import MridataParser
 from qbixnat.dataparser.CosmedParser import CosmedParser
+from qbixnat.dataparser.VisitParser import VisitParser
 
 
 class OPEXUploader():
@@ -186,7 +187,11 @@ class OPEXUploader():
                         elif ('FS' in xsdtypes or 'COBAS' in xsdtypes):
                             xsd = dp.getxsd()[dp.type]
                             (mandata, data) = dp.mapData(row, i, xsd)
-                            msg = self.loadSampledata(s, xsd, dp.type + "_" + sampleid, mandata, data)
+                            if dp.opex is not None:
+                                prefix = dp.opex['prefix'][dp.opex['xsitype']==xsd]
+                            else:
+                                prefix = dp.type
+                            msg = self.loadSampledata(s, xsd, prefix + "_" + sampleid, mandata, data)
                             logging.info(msg)
                             print(msg)
                         else: #cantab and ACER
@@ -343,6 +348,7 @@ if __name__ == "__main__":
     parser.add_argument('--cosmed', action='store', help='Upload COSMED data from directory')
     parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory', default="VO2data_crosschecked_20170926")
     parser.add_argument('--cosmed_datafile', action='store', help='COSMED VO2 datafile', default='VO2data_VEVCO2_20171009.xlsx')
+    parser.add_argument('--visit', action='store', help='Update visit dates', default='sampledata\\visit\\Visits_genders.xlsx')
 
     args = parser.parse_args()
     uploader = OPEXUploader(args)
@@ -643,6 +649,14 @@ if __name__ == "__main__":
                 else:
                     raise IOError("Input dir error")
 
+            if (uploader.args.visit is not None and uploader.args.visit):
+                inputfile = uploader.args.visit
+                print("Input:", inputfile)
+                try:
+                    dp = VisitParser(inputfile, 1, 1)
+                    dp.processData(projectcode,uploader.xnat)
+                except Exception as e:
+                    print e
         else:
             raise ConnectionError("Connection failed - check config")
     except IOError as e:

@@ -34,6 +34,7 @@ class OPEXReport(object):
         self.maxmth = 12
         self.cache = csvfile
         self.xnat = None
+        self.opex = pandas.read_csv(join('resources', 'opex.csv'))
         self.exptintervals = self.__experiments()
         if csvfile is not None:
             self.data = pandas.read_csv(csvfile)

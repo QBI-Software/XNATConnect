@@ -32,7 +32,9 @@ class BloodParser(DataParser):
             fields = kwargs.get('fields')
         else:
             fields = 'resources/blood_fields.csv'
+
         try:
+            self.opex = pandas.read_csv(join('resources', 'opex.csv'))
             access(fields, R_OK)
             df = pandas.read_csv(fields, header=0)
             self.fields = df[self.type]
@@ -142,10 +144,7 @@ class BloodParser(DataParser):
         for ctab in self.fields:
             if ctab in row:
                 data[xsd + '/' + ctab] = str(row[ctab])
-        # data = { xsd + '/HGH': str(row['HGH']),
-        #     xsd + '/Prolactin': str(row['Prolactin']),
-        #     xsd + '/Cortisol': str(row['Cortisol']),
-        #     xsd + '/Insulin': str(row['Insulin'])}
+
         return (mandata,data)
 
 
