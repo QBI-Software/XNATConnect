@@ -242,12 +242,25 @@ class OPEXUploaderGUI(UploaderGUI):
             print options
 
             cmd = self.__loadCommand(options)
+            self.tcResults.Clear()
             self.tcResults.AppendText(cmd)
             self.tcResults.AppendText("\n*******\n")
 
             try:
-                output = subprocess.check_output(cmd, shell=True)
-                self.tcResults.AppendText(output)
+                p= subprocess.Popen(cmd, shell=True,stdout=subprocess.PIPE, bufsize=1, universal_newlines=True)
+                while True:
+                    line = p.stdout.readline()
+                    self.tcResults.AppendText(line)
+                    if self.tcResults.GetNumberOfLines() >= 500:
+                        print "Lines cleared: ", self.tcResults.GetNumberOfLines()
+                        self.tcResults.Clear()
+                        p.stdout.flush()
+                    if line == '' and p.poll() is not None:
+                        break
+
+                if p.returncode != 0:
+                    raise subprocess.CalledProcessError(p.returncode, cmd)
+
                 self.tcResults.AppendText("\n***FINISHED***\n")
 
             except subprocess.CalledProcessError as e:

@@ -17,7 +17,7 @@ from os.path import join
 import pandas as pd
 from datetime import datetime
 from numpy import isnan
-
+import logging
 
 from qbixnat.dataparser.DataParser import DataParser
 
@@ -76,6 +76,8 @@ class VisitParser(DataParser):
                                         if xnatexpt is not None:
                                             #remove or update comment
                                             xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
+                                            msg = '%s date updated %s' % (xnatexpt.id(),d)
+                                            logging.info(msg)
                             else:
                                 exptid = "%s_%s_%sm_%s_%d" % (prefix, subject_id, intval, se.lower(), 1)
                                 if isinstance(d, datetime) and not isnan(d.day) and not self.futureDate(d):
@@ -87,6 +89,8 @@ class VisitParser(DataParser):
                                     if xnatexpt is not None:
                                         # remove or update comment
                                         xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
+                                        msg = '%s date updated %s' % (xnatexpt.id(), d)
+                                        logging.info(msg)
                     else:
                         if expt in ['MRI ASHS', 'MRI FS']:
                             eint = "MRI_" + intval

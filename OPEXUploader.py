@@ -4,11 +4,12 @@ import glob
 import logging
 import os
 import re
+import shutil
 import sys
 from datetime import date
-from os import R_OK, access,listdir
-from os.path import expanduser,isdir, join, basename
-import shutil
+from os import R_OK, access, listdir
+from os.path import expanduser, isdir, join, basename
+
 import numpy as np
 import pandas
 from requests.exceptions import ConnectionError
@@ -18,9 +19,9 @@ from qbixnat.dataparser.AcerParser import AcerParser
 from qbixnat.dataparser.AmunetParser import AmunetParser
 from qbixnat.dataparser.BloodParser import BloodParser
 from qbixnat.dataparser.CantabParser import CantabParser
+from qbixnat.dataparser.CosmedParser import CosmedParser
 from qbixnat.dataparser.DexaParser import DexaParser
 from qbixnat.dataparser.MridataParser import MridataParser
-from qbixnat.dataparser.CosmedParser import CosmedParser
 from qbixnat.dataparser.VisitParser import VisitParser
 
 
@@ -56,8 +57,7 @@ class OPEXUploader():
     def xnatdisconnect(self):
         self.xnat.conn.disconnect()
 
-
-    def loadSampledata(self,subject, samplexsd, sampleid, mandata,sampledata):
+    def loadSampledata(self, subject, samplexsd, sampleid, mandata, sampledata):
         """ Loads sample data from CANTAB data dump
         Check if already exists - don't overwrite (allows for cumulative data files to be uploaded)
         :param sampleid: ID for this row of CANTAB data
@@ -72,14 +72,13 @@ class OPEXUploader():
         else:
             update = False
         if not expt.exists() or update:
-            self.xnat.createExperiment(subject, samplexsd, sampleid, mandata,sampledata)
+            self.xnat.createExperiment(subject, samplexsd, sampleid, mandata, sampledata)
             msg = 'Experiment created:' + sampleid
         else:
             msg = 'Experiment already exists: ' + sampleid
         return msg
 
-
-    def loadAMUNETdata(self,sampleid,i,row,subject, amparser):
+    def loadAMUNETdata(self, sampleid, i, row, subject, amparser):
         """ Loads AMUNET sample data from data dump
         Data is combined from two source files
         Check if expt already exists - don't overwrite (allows for cumulative data files to be uploaded)
@@ -94,39 +93,40 @@ class OPEXUploader():
         expt = subject.experiment(motid)
 
         if not expt.exists() or (self.args.update is not None and self.args.update):
-            #two files with different columns merged to one
+            # two files with different columns merged to one
             if 'AEV_Average total error' in row:
-                (mandata,motdata) = amparser.mapAEVdata(row,i)
+                (mandata, motdata) = amparser.mapAEVdata(row, i)
             else:
-                (mandata, motdata) = amparser.mapSCSdata(row,i)
-            #motdata[motxsd + '/date'] = amparser.dates[motid]
-            self.xnat.createExperiment(subject, motxsd, motid, mandata,motdata)
+                (mandata, motdata) = amparser.mapSCSdata(row, i)
+            # motdata[motxsd + '/date'] = amparser.dates[motid]
+            self.xnat.createExperiment(subject, motxsd, motid, mandata, motdata)
             msg = 'Amunet experiment created:' + motid
 
-        elif (len(expt.xpath('opex:AEV')) > 0 and len(expt.xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row):  # loaded AEV data but not SCS
+        elif (len(expt.xpath('opex:AEV')) > 0 and len(
+                expt.xpath('opex:SCS')) == 0 and 'SCS_Average total error' in row):  # loaded AEV data but not SCS
             e1 = expt
-            (mandata, motdata) = amparser.mapSCSdata(row,i)
+            (mandata, motdata) = amparser.mapSCSdata(row, i)
             e1.attrs.mset(motdata)
-            msg = 'Amunet experiment updated with SCS: '+ motid
+            msg = 'Amunet experiment updated with SCS: ' + motid
 
-        elif(len(expt.xpath('opex:SCS')) > 0 and len(expt.xpath('opex:AEV')) == 0 and 'AEV_Average total error' in row):  # loaded SCS data but not AEV
+        elif (len(expt.xpath('opex:SCS')) > 0 and len(
+                expt.xpath('opex:AEV')) == 0 and 'AEV_Average total error' in row):  # loaded SCS data but not AEV
             e1 = expt
-            (mandata, motdata) = amparser.mapAEVdata(row,i)
+            (mandata, motdata) = amparser.mapAEVdata(row, i)
             e1.attrs.mset(motdata)
-            msg = 'Amunet experiment updated with AEV: '+ motid
+            msg = 'Amunet experiment updated with AEV: ' + motid
         else:
             msg = 'Amunet experiment already exists: ' + motid
         return msg
 
-
-    def uploadData(self,project,dp):
+    def uploadData(self, project, dp):
         """
         Upload data via specific Data parser
         :param dp:
         :return: missing and matches
         """
-        missing=[]
-        matches=[]
+        missing = []
+        matches = []
         dp.sortSubjects()
         for sd in dp.subjects:
             print('ID:', sd)
@@ -144,14 +144,14 @@ class OPEXUploader():
                     continue
             # Load data PER ROW
             matches.append(sd)
-            if self.args.checks is None or not self.args.checks: #Don't upload if checks
+            if self.args.checks is None or not self.args.checks:  # Don't upload if checks
                 xsdtypes = dp.getxsd()
                 if 'dexa' in xsdtypes:
-                    checkfield = dp.fields['Field'][0] #test if data in row
+                    checkfield = dp.fields['Field'][0]  # test if data in row
                     for i, row in dp.subjects[sd].items():
                         if checkfield in row and not np.isnan(row[checkfield].iloc[0]):
                             print 'Interval:', dp.intervals[i]
-                            sampleid = dp.getSampleid(sd,i)
+                            sampleid = dp.getSampleid(sd, i)
                             (mandata, data) = dp.mapData(row, i, xsdtypes)
                             msg = self.loadSampledata(s, xsdtypes, sampleid, mandata, data)
                             logging.info(msg)
@@ -159,8 +159,8 @@ class OPEXUploader():
                 elif 'cosmed' in xsdtypes:
                     for i, row in dp.subjects[sd].items():
                         row.replace(np.nan, '', inplace=True)
-                        sampleid = dp.getSampleid(sd,i)
-                        if sampleid in ['COS_1021LB_0','COS_1021LB_3']:
+                        sampleid = dp.getSampleid(sd, i)
+                        if sampleid in ['COS_1021LB_0', 'COS_1021LB_3']:
                             continue
                         (mandata, data) = dp.mapData(row, i, xsdtypes)
 
@@ -188,23 +188,22 @@ class OPEXUploader():
                             xsd = dp.getxsd()[dp.type]
                             (mandata, data) = dp.mapData(row, i, xsd)
                             if dp.opex is not None:
-                                prefix = dp.opex['prefix'][dp.opex['xsitype']==xsd]
+                                prefix = dp.opex['prefix'][dp.opex['xsitype'] == xsd]
                             else:
                                 prefix = dp.type
                             msg = self.loadSampledata(s, xsd, prefix + "_" + sampleid, mandata, data)
                             logging.info(msg)
                             print(msg)
-                        else: #cantab and ACER
+                        else:  # cantab and ACER
                             for type in xsdtypes.keys():
                                 (mandata, data) = dp.mapData(row, i, type)
                                 xsd = xsdtypes[type]
                                 msg = self.loadSampledata(s, xsd, type + "_" + sampleid, mandata, data)
                                 logging.info(msg)
                                 print(msg)
-        return (missing,matches)
+        return (missing, matches)
 
-
-    def outputChecks(self,projectcode,matches, missing, inputdir,f2):
+    def outputChecks(self, projectcode, matches, missing, inputdir, f2):
         """
         Test run without actual uploading
         :param matches: List of matched participant IDs
@@ -217,15 +216,15 @@ class OPEXUploader():
         if not os.path.exists(reportdir):
             os.mkdir(reportdir)
         filename = os.path.basename(f2)
-        match_filename = join(reportdir,filename + "_matched.csv" )
-        missing_filename= join(reportdir,filename + "_missing.csv" )
+        match_filename = join(reportdir, filename + "_matched.csv")
+        missing_filename = join(reportdir, filename + "_missing.csv")
         with open(match_filename, 'wb') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',')
             spamwriter.writerow(['Matched ID'])
             for m in sorted(matches):
                 spamwriter.writerow([m])
 
-        #Missing subjects
+        # Missing subjects
         with open(missing_filename, 'wb') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',')
             spamwriter.writerow(['Missing participants in XNAT'])
@@ -234,11 +233,11 @@ class OPEXUploader():
                 rootid = m['ID'][0:4]
                 guess = [s.label() for s in sids if rootid in s.label()]
                 if len(guess) <= 0:
-                    guess=""
+                    guess = ""
                 else:
-                    guess="Possible ID: " + ",".join(guess)
+                    guess = "Possible ID: " + ",".join(guess)
                 spamwriter.writerow([m['ID'], guess])
-                if not isinstance(m['rows'],dict):
+                if not isinstance(m['rows'], dict):
                     for i, row in m['rows'].iterrows():
                         if ('Row Number' in row):
                             spamwriter.writerow(["Row:", row['Row Number']])
@@ -255,7 +254,7 @@ class OPEXUploader():
         logging.info(msg)
         print(msg)
 
-        return (match_filename,missing_filename)
+        return (match_filename, missing_filename)
 
     def extractDateInfo(self, dirpath, ext='zip'):
         """
@@ -268,13 +267,13 @@ class OPEXUploader():
         seriespattern = '*.' + ext
         zipfiles = glob.glob(join(dirpath, seriespattern))
         print("Total files: ", len(zipfiles))
-        #Extract date from filename - expect
+        # Extract date from filename - expect
         rid = re.compile('^(\d{4}.{2})')
         rdate = re.compile('(\d{8})\.zip$')
         for filename in zipfiles:
             f = os.path.basename(filename)
 
-            #some dates are in reverse
+            # some dates are in reverse
             try:
                 if (rid.search(f) and rdate.search(f)):
                     fid = rid.search(f).group(0).upper()
@@ -289,7 +288,6 @@ class OPEXUploader():
                 msg = "Error: %s: %s" % (e, f)
                 logging.error(msg)
                 continue
-
 
             if participantdates.get(fid) is not None:
                 participantdates[fid].append(fdateobj)
@@ -319,6 +317,7 @@ class OPEXUploader():
                 print("Finished")
                 return csvfile
 
+
 ########################################################################
 if __name__ == "__main__":
 
@@ -337,18 +336,22 @@ if __name__ == "__main__":
     parser.add_argument('--update', action='store_true', help='Also update existing data')
     parser.add_argument('--skiprows', action='store_true', help='Skip rows in CANTAB data if NOT_RUN or ABORTED')
     parser.add_argument('--amunet', action='store', help='Upload Water Maze (Amunet) data from directory')
-    parser.add_argument('--amunetdates',action='store', help='Extract date info from orig files in this dir')
+    parser.add_argument('--amunetdates', action='store', help='Extract date info from orig files in this dir')
     parser.add_argument('--acer', action='store', help='Upload ACER data from directory')
     parser.add_argument('--blood', action='store', help='Upload BLOOD data from directory')
     parser.add_argument('--create', action='store_true', help='Create Subject from input data if not exists')
-    parser.add_argument('--mridata', action='store', help='Upload MRI data from directory - detects ASHS or FreeSurf from filename')
+    parser.add_argument('--mridata', action='store',
+                        help='Upload MRI data from directory - detects ASHS or FreeSurf from filename')
     parser.add_argument('--mri', action='store',
                         help='Upload MRI scans from directory with data/subject_label/scans/session_label/[*.dcm|*.IMA]')
     parser.add_argument('--dexa', action='store', help='Upload DEXA data from directory')
     parser.add_argument('--cosmed', action='store', help='Upload COSMED data from directory')
-    parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory', default="VO2data_crosschecked_20170926")
-    parser.add_argument('--cosmed_datafile', action='store', help='COSMED VO2 datafile', default='VO2data_VEVCO2_20171009.xlsx')
-    parser.add_argument('--visit', action='store', help='Update visit dates', default='sampledata\\visit\\Visits_genders.xlsx')
+    parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory',
+                        default="VO2data_crosschecked_20170926")
+    parser.add_argument('--cosmed_datafile', action='store', help='COSMED VO2 datafile',
+                        default='VO2data_VEVCO2_20171009.xlsx')
+    parser.add_argument('--visit', action='store', help='Update visit dates',
+                        default='sampledata\\visit\\Visits_genders.xlsx')
 
     args = parser.parse_args()
     uploader = OPEXUploader(args)
@@ -360,10 +363,10 @@ if __name__ == "__main__":
         if uploader.xnat.testconnection():
             logging.info("...Connected")
             print("Connected")
-            #Check project code is correct
+            # Check project code is correct
             projectcode = uploader.args.projectcode
             p = uploader.xnat.get_project(projectcode)
-            #Test run
+            # Test run
             missing = []
             matches = []
             if (not p.exists()):
@@ -393,45 +396,41 @@ if __name__ == "__main__":
                 else:
                     msg = "Directory path cannot be found: %s" % uploaddir
                     raise IOError(msg)
+                    #########################################################################################################
             # Upload CANTAB data from directory
             if (uploader.args.cantab is not None and uploader.args.cantab):
                 sheet = "RowBySession_HealthyBrains"
                 inputdir = uploader.args.cantab
                 fields = uploader.args.fields
-                if fields is None or len(fields) <=0:
+                if fields is None or len(fields) <= 0:
                     fields = 'cantab_fields.csv'
 
-                cantabfields = os.path.join("resources",fields)
+                cantabfields = os.path.join("resources", fields)
                 print("Input:", inputdir)
                 if access(inputdir, R_OK):
                     seriespattern = '*.csv'
-                    try:
-                        files = glob.glob(join(inputdir, seriespattern))
-                        print("Files:", len(files))
-                        project = uploader.xnat.get_project(projectcode)
-                        for f2 in files:
-                            if ("RowBySession" in f2):
-                                print "Loading: ", f2
-                                dp = CantabParser(cantabfields,f2, sheet)
-                                (missing,matches) = uploader.uploadData(project,dp)
-                                # Output matches and missing
-                                if len(matches) > 0 or len(missing) > 0:
-                                    (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                    msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                    print(msg)
-                                    logging.info(msg)
-
-                    except:
-                        e = sys.exc_info()[0]
-                        raise ValueError(e)
-
+                    files = glob.glob(join(inputdir, seriespattern))
+                    print("Files:", len(files))
+                    project = uploader.xnat.get_project(projectcode)
+                    for f2 in files:
+                        if ("RowBySession" in f2):
+                            print "Loading: ", f2
+                            dp = CantabParser(cantabfields, f2, sheet)
+                            (missing, matches) = uploader.uploadData(project, dp)
+                            # Output matches and missing
+                            if len(matches) > 0 or len(missing) > 0:
+                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                                print(msg)
+                                logging.info(msg)
                 else:
-                    msg = "Access to data directory is denied: %s" % inputdir
-                    raise ConnectionError(msg)
+                    raise IOError("Input dir error")
+
+                #########################################################################################################
             ### Upload Amunet data from directory
             # Files are in 2 parts and do not contain interval or visit date so should be separated into folders:
             # 0m, 3m, 6m, 9m
-            # Dates are generated separately below from the raw folders TODO: incorporate into this function - path given in "folderpath.txt"
+            # Dates are generated separately below from the raw folders - path given in "folderpath.txt"
             # csv files with dates should be placed in the same directory to be loaded with sortSubjects
             if (uploader.args.amunet is not None and uploader.args.amunet):
                 sheet = 0
@@ -442,83 +441,73 @@ if __name__ == "__main__":
                 if access(topinputdir, R_OK):
                     subdirs = listdir(topinputdir)
                     for inputdir in subdirs:
-                        if inputdir not in ['0m', '3m', '6m', '9m']:
+                        if inputdir not in ['0m', '3m', '6m', '9m', '12m']:
                             continue
                         interval = inputdir[0]
-                        inputdir = join(topinputdir,inputdir)
-
-                        try:
-                            #Get dates from zip files
-                            dates_uri_file = join(inputdir, 'folderpath.txt')
-                            with open(dates_uri_file, "r") as dd:
-                                content = dd.readlines()
-                                for line in content:
-                                    dates_uri = line.strip()
-                                    break
-                            if len(dates_uri) <=0:
-                                raise ValueError('No dates file found - exiting')
-                            dates_csv = uploader.generateAmunetdates(dates_uri,basedatesfile, interval)
-                            #copy file to this dir
-                            shutil.copyfile(dates_csv, join(inputdir,basename(dates_csv)))
-                            #Get xls files
-                            files = glob.glob(join(inputdir, seriespattern))
-                            print("Files:", len(files))
-                            project = uploader.xnat.get_project(projectcode)
-                            for f2 in files:
-                                print("Loading", f2)
-                                dp = AmunetParser(f2, sheet)
-                                #dp.extractDateInfo(uploader.args.amunetpath)
-                                dp.interval = interval
-                                (missing, matches) = uploader.uploadData(project, dp)
-                                # Output matches and missing
-                                if len(matches) > 0 or len(missing) > 0:
-                                    (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                    msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                    print(msg)
-                                    logging.info(msg)
-
-                        except ValueError as e:
-                            raise e
-                        except:
-                            e = sys.exc_info()[0]
-                            raise ValueError(e)
-                else:
-                    raise IOError("Input dir error")
-            if (uploader.args.amunetdates is not None and uploader.args.amunetdates):
-                dirpath = uploader.args.amunetdates
-                basedatesfile = 'amunet_participantdates.csv'
-                uploader.generateAmunetdates(dirpath, basedatesfile, interval)
-                        #writer.close()
-
-            ### Upload ACE-R data from directory
-            if (uploader.args.acer is not None and uploader.args.acer):
-                sheet = "1"
-                inputdir = uploader.args.acer
-                print("Input:", inputdir)
-                if access(inputdir, R_OK):
-                    seriespattern = '*.*'
-                    try:
+                        inputdir = join(topinputdir, inputdir)
+                        # Get dates from zip files
+                        dates_uri_file = join(inputdir, 'folderpath.txt')
+                        with open(dates_uri_file, "r") as dd:
+                            content = dd.readlines()
+                            for line in content:
+                                dates_uri = line.strip()
+                                break
+                        if len(dates_uri) <= 0:
+                            raise ValueError('No dates file found - exiting')
+                        dates_csv = uploader.generateAmunetdates(dates_uri, basedatesfile, interval)
+                        # copy file to this dir
+                        shutil.copyfile(dates_csv, join(inputdir, basename(dates_csv)))
+                        # Get xls files
                         files = glob.glob(join(inputdir, seriespattern))
                         print("Files:", len(files))
                         project = uploader.xnat.get_project(projectcode)
                         for f2 in files:
                             print("Loading", f2)
-                            dp = AcerParser(f2, sheet)
+                            dp = AmunetParser(f2, sheet)
+                            # dp.extractDateInfo(uploader.args.amunetpath)
+                            dp.interval = interval
                             (missing, matches) = uploader.uploadData(project, dp)
                             # Output matches and missing
                             if len(matches) > 0 or len(missing) > 0:
                                 (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1,out2)
+                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
                                 print(msg)
                                 logging.info(msg)
+                else:
+                    raise IOError("Input dir error")
+                    #########################################################################################################                       ## Amunet dates only
+            if (uploader.args.amunetdates is not None and uploader.args.amunetdates):
+                dirpath = uploader.args.amunetdates
+                basedatesfile = 'amunet_participantdates.csv'
+                uploader.generateAmunetdates(dirpath, basedatesfile, interval)
 
-                    except:
-                        e = sys.exc_info()[0]
-                        raise ValueError(e)
+            #########################################################################################################
+            ### Upload ACE-R data from directory
+            if (uploader.args.acer is not None and uploader.args.acer):
+                sheet = "1"
+                inputdir = uploader.args.acer
+                msg = "ACER Input: %s" % inputdir
+                logging.info(msg)
+                if access(inputdir, R_OK):
+                    seriespattern = '*.*'
+                    files = glob.glob(join(inputdir, seriespattern))
+                    print("Files:", len(files))
+                    project = uploader.xnat.get_project(projectcode)
+                    for f2 in files:
+                        print("Loading", f2)
+                        dp = AcerParser(f2, sheet)
+                        (missing, matches) = uploader.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
                 else:
                     raise IOError("Input dir error")
 
-            ### Upload MRI data analysis from directory
+                    #########################################################################################################
+            # Upload MRI data analysis from directory
             if (uploader.args.mridata is not None and uploader.args.mridata):
                 sheet = "1"
                 inputdir = uploader.args.mridata
@@ -526,137 +515,126 @@ if __name__ == "__main__":
                     mrifields = os.path.join("resources", uploader.args.fields)
                 else:
                     mrifields = os.path.join("resources", "MRI_fields.csv")
-                print "MRIdata Input: %s" % inputdir
+                msg = "MRIdata Input: %s" % inputdir
+                logging.info(msg)
                 if access(inputdir, R_OK):
                     seriespattern = '*.csv'
-                    try:
-                        files = glob.glob(join(inputdir, seriespattern))
-                        print("Files:", len(files))
-                        project = uploader.xnat.get_project(projectcode)
-                        for f2 in files:
-                            print("Loading", f2, "with fields: ", mrifields)
-                            dp = MridataParser(mrifields,f2, sheet)
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
-                                                                     f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
-
-                    except:
-                        e = sys.exc_info()[0]
-                        raise ValueError(e)
+                    files = glob.glob(join(inputdir, seriespattern))
+                    print("Files:", len(files))
+                    project = uploader.xnat.get_project(projectcode)
+                    for f2 in files:
+                        print("Loading", f2, "with fields: ", mrifields)
+                        dp = MridataParser(mrifields, f2, sheet)
+                        (missing, matches) = uploader.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
+                                                                 f2)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
                 else:
                     raise IOError("Input dir error")
-
+                    #########################################################################################################
             # Upload BLOOD data from directory
             if (uploader.args.blood is not None and uploader.args.blood):
                 sheet = 0
                 skip = 1
                 inputdir = uploader.args.blood
-                #assume dir is type eg COBAS to match
+                # assume dir is type eg COBAS to match
                 parts = os.path.split(inputdir)
                 type = parts[1]
-                print("Input:", inputdir)
+                msg = "Blood data Input: %s" % inputdir
+                logging.info(msg)
                 if access(inputdir, R_OK):
                     seriespattern = '*.xlsx'
-                    try:
-                        files = glob.glob(join(inputdir, seriespattern))
-                        print("Files:", len(files))
-                        project = uploader.xnat.get_project(projectcode)
-                        for f2 in files:
-                            print "\n****Loading", f2
-                            dp = BloodParser(f2, sheet, skip, type=type)
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
-                                                                     f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
-                    except Exception as e:
-                        raise ValueError(e)
-                else:
-                    raise IOError("Input dir error")
-
+                    files = glob.glob(join(inputdir, seriespattern))
+                    print("Files:", len(files))
+                    project = uploader.xnat.get_project(projectcode)
+                    for f2 in files:
+                        print "\n****Loading", f2
+                        dp = BloodParser(f2, sheet, skip, type=type)
+                        (missing, matches) = uploader.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
+                    else:
+                        raise IOError("Input dir error")
+                        #########################################################################################################
             # Upload DEXA data from directory
             if (uploader.args.dexa is not None and uploader.args.dexa):
                 sheet = 0
                 skip = 4
                 inputdir = uploader.args.dexa
-                print "Running DEXA: ", inputdir
+                msg = "DEXA Input: %s" % inputdir
+                logging.info(msg)
                 if uploader.args.fields is not None:
                     fields = os.path.join("resources", uploader.args.fields)
                 else:
                     fields = os.path.join("resources", "dexa_fields.xlsx")
                 if access(inputdir, R_OK):
                     seriespattern = 'DXA Data entry*.xlsx'
-                    try:
-                        files = glob.glob(join(inputdir, seriespattern))
-                        print "Files:", len(files)
-                        project = uploader.xnat.get_project(projectcode)
-                        for f2 in files:
-                            print "Loading ", f2
-                            dp = DexaParser(fields, f2, sheet, skip)
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir,
-                                                                     f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
-
-                    except Exception as e:
-                        raise ValueError(e)
+                    files = glob.glob(join(inputdir, seriespattern))
+                    print "Files:", len(files)
+                    project = uploader.xnat.get_project(projectcode)
+                    for f2 in files:
+                        print "Loading ", f2
+                        dp = DexaParser(fields, f2, sheet, skip)
+                        (missing, matches) = uploader.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
                 else:
                     raise IOError("Input dir error")
-
+                    #########################################################################################################
             # Upload COSMED data from directory
             if (uploader.args.cosmed is not None and uploader.args.cosmed):
                 inputdir = uploader.args.cosmed
-                inputsubdir=uploader.args.cosmed_subdir #"VO2data_crosschecked"
-                datafile = uploader.args.cosmed_datafile #'VO2data_VEVCO2_20171009.xlsx'
-                print "Running COSMED: ", inputdir
+                inputsubdir = uploader.args.cosmed_subdir  # "VO2data_crosschecked"
+                datafile = uploader.args.cosmed_datafile  # 'VO2data_VEVCO2_20171009.xlsx'
+                msg = "COSMED Input: %s" % inputdir
+                logging.info(msg)
                 if uploader.args.fields is not None:
                     fields = os.path.join("resources", uploader.args.fields)
                 else:
                     fields = os.path.join("resources", "cosmed_fields.xlsx")
                 if access(inputdir, R_OK):
-                    try:
-                        project = uploader.xnat.get_project(projectcode)
-                        dp = CosmedParser(inputdir, inputsubdir, datafile, fields)
-                        if dp.df.empty:
-                            raise ValueError('Data error during compilation - not uploaded to XNAT')
-                        else:
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode,
-                                                                     matches,
-                                                                     missing,
-                                                                     inputdir,
-                                                                     datafile)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
-
-                    except Exception as e:
-                        raise ValueError(e)
+                    project = uploader.xnat.get_project(projectcode)
+                    dp = CosmedParser(inputdir, inputsubdir, datafile, fields)
+                    if dp.df.empty:
+                        raise ValueError('Data error during compilation - not uploaded to XNAT')
+                    else:
+                        (missing, matches) = uploader.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = uploader.outputChecks(projectcode,
+                                                                 matches,
+                                                                 missing,
+                                                                 inputdir,
+                                                                 datafile)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
                 else:
                     raise IOError("Input dir error")
-
+                #########################################################################################################
+            # Update dates for data not containing visit date
             if (uploader.args.visit is not None and uploader.args.visit):
-                inputfile = uploader.args.visit
-                print("Input:", inputfile)
-                try:
+                inputdir = uploader.args.visit
+                seriespattern = 'Visit*.xlsx'
+                files = glob.glob(join(inputdir, seriespattern))
+                for inputfile in files:
+                    msg = 'Running Visit dates update: %s' % inputfile
+                    logging.info(msg)
                     dp = VisitParser(inputfile, 1, 1)
-                    dp.processData(projectcode,uploader.xnat)
-                except Exception as e:
-                    print e
+                    dp.processData(projectcode, uploader.xnat)
+
         else:
             raise ConnectionError("Connection failed - check config")
     except IOError as e:
@@ -667,10 +645,11 @@ if __name__ == "__main__":
         print "Failed connection:", e
     except ValueError as e:
         logging.error(e)
+        print "ValueError:", e
+    except Exception as e:
+        logging.error(e)
         print "ERROR:", e
-    finally:
-        #Processing complete
+    finally:  # Processing complete
         uploader.xnatdisconnect()
         logging.info("FINISHED")
         print("FINISHED - see xnatupload.log for details")
-
