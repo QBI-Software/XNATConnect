@@ -251,10 +251,10 @@ class OPEXUploaderGUI(UploaderGUI):
                 while True:
                     line = p.stdout.readline()
                     self.tcResults.AppendText(line)
-                    if self.tcResults.GetNumberOfLines() >= 500:
-                        print "Lines cleared: ", self.tcResults.GetNumberOfLines()
-                        self.tcResults.Clear()
-                        p.stdout.flush()
+                    # if self.tcResults.GetNumberOfLines() >= 500:
+                    #     print "Lines cleared: ", self.tcResults.GetNumberOfLines()
+                    #     self.tcResults.Clear()
+                    #     p.stdout.flush()
                     if line == '' and p.poll() is not None:
                         break
 

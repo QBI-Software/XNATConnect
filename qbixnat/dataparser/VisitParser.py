@@ -53,10 +53,20 @@ class VisitParser(DataParser):
         for i, sd in self.data.iterrows():
             subject_id = sd['ID'].replace(" ", "")
             # if subject in database, else skip
+            if xnat is not None:
+                project = xnat.get_project(projectcode)
+                s = project.subject(subject_id)
+                if not s.exists():
+                    continue
             # get each experiment and check date matches - these are upload dates by default
             for expt in ['DEXA', 'COBAS', 'ELISAS', 'MULTIPLEX', 'MRI ASHS', 'MRI FS']:
-                xtype = self.opex['xsitype'][self.opex['Expt'] == expt].values[0]
                 prefix = self.opex['prefix'][self.opex['Expt'] == expt].values[0]
+                xtype = self.opex['xsitype'][self.opex['Expt'] == expt].values[0]
+                if xnat is not None and s is not None:
+                    xexpts = s.experiments(prefix + '_*')
+                    if len(xexpts.fetchall()) <=0:
+                        continue
+
                 for intval in intvals:
                     if expt in ['COBAS', 'ELISAS', 'MULTIPLEX']:
                         subexpts = ["FASTED", "PREPOST"]
@@ -71,8 +81,19 @@ class VisitParser(DataParser):
                                     if isinstance(d, datetime) and not isnan(d.day) and not self.futureDate(d):
                                         msg = "Subject: %s | Type: %s | ID: %s | Date: %s | Exptid: %s" % (subject_id, xtype, eint, d, exptid)
                                         print msg
-                                    if xnat is not None:
-                                        xnatexpt = xnat.updateExptDate(projectcode,exptid, d, xtype)
+                                    if xnat is not None and s is not None:
+                                        #Get correct ID - last digit may vary
+                                        e = s.experiment(exptid)
+                                        if not e.exists():
+                                            # check for similar but difnt counter for bloods
+                                            expts = s.experiments(exptid[0:-2] + '*')
+                                            xnatexpt = expts.fetchone()
+                                            if xnatexpt is None or not xnatexpt.exists():
+                                                print "Expt not found: ", exptid
+                                                continue
+                                            else:
+                                                exptid = xnatexpt.id()
+                                        xnatexpt = xnat.updateExptDate(s,exptid, d, xtype)
                                         if xnatexpt is not None:
                                             #remove or update comment
                                             xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
@@ -84,8 +105,18 @@ class VisitParser(DataParser):
                                     msg = "Subject: %s | Type: %s | ID: %s | Date: %s | Exptid: %s" % (
                                     subject_id, xtype, eint, d, exptid)
                                     print msg
-                                if xnat is not None:
-                                    xnatexpt = xnat.updateExptDate(projectcode, exptid, d, xtype)
+                                if xnat is not None and s is not None:
+                                    e = s.experiment(exptid)
+                                    if not e.exists():
+                                        # check for similar but difnt counter for bloods
+                                        expts = s.experiments(exptid[0:-2] + '*')
+                                        xnatexpt = expts.fetchone()
+                                        if xnatexpt is None or not xnatexpt.exists():
+                                            print "Expt not found: ", exptid
+                                            continue
+                                        else:
+                                            exptid = xnatexpt.id()
+                                    xnatexpt = xnat.updateExptDate(s, exptid, d, xtype)
                                     if xnatexpt is not None:
                                         # remove or update comment
                                         xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
@@ -104,12 +135,17 @@ class VisitParser(DataParser):
                             msg = "Subject: %s | Type: %s | ID: %s | Date: %s | Exptid: %s" % (
                             subject_id, xtype, eint, d, exptid)
                             print msg
-                            if xnat is not None:
-                                xnatexpt = xnat.updateExptDate(projectcode,exptid, d, xtype)
+                            if xnat is not None and s is not None:
+                                xnatexpt = xnat.updateExptDate(s,exptid, d, xtype)
                                 if xnatexpt is not None:
                                     # remove or update comment
                                     comments = xnatexpt.attrs.get(xtype + '/comments')
-                                    xnatexpt.attrs.set(xtype + '/comments', comments + '; Date updated')
+                                    if comments.startswith('; Date updated'):
+                                        xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
+                                    else:
+                                        xnatexpt.attrs.set(xtype + '/comments', comments + '; Date updated')
+                                    msg = '%s date updated %s' % (xnatexpt.id(), d)
+                                    logging.info(msg)
 
 
 ########################################################################
