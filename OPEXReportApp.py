@@ -41,6 +41,7 @@ class OPEXReportApp(object):
             self.database = config['DATABASE']
             self.project = config['PROJECT']
             self.cache = config['CACHEDIR']
+            self.resources = config['RESOURCES']
             self.dbconfig = config['DBCONFIG']
             self.logs = config['LOGS']
         else:
@@ -48,6 +49,7 @@ class OPEXReportApp(object):
             self.database = 'xnat-dev-opex'
             self.project = 'P1'
             self.cache = 'cache'
+            self.resources = 'resources'
             self.dbconfig = join(home,'.xnat.cfg')
             self.logs = 'logs'
 
@@ -77,19 +79,19 @@ class OPEXReportApp(object):
                 subjects = xnat.getSubjectsDataframe(self.project)
                 msg = "Loaded %d subjects from %s : %s" % (len(subjects), self.database, self.project)
                 logging.info(msg)
-                report = OPEXReport(subjects=subjects,csvfile=csv)
+                report = OPEXReport(subjects=subjects,csvfile=csv,opexfile=join(self.resources,'opex.csv'))
                 report.xnat = xnat
                 # Generate dataframes for display
                 self.df_participants = report.getParticipants()
-                logging.debug('Participants loaded')
+                logging.info('Participants loaded')
                 #print self.df_participants
                 self.df_report = report.printMissingExpts(self.project)
                 self.df_report.sort_values(by=['MONTH', 'Subject'], inplace=True, ascending=False)
-                logging.debug("Missing experiments loaded")
+                logging.info("Missing experiments loaded")
                 #print self.df_report.head()
                 # Get expts
                 self.df_expts = report.getExptCollection(projectcode=self.project)
-                logging.debug("Experiment collection loaded")
+                logging.info("Experiment collection loaded")
                 #print self.df_expts.head()
 
         except IOError:

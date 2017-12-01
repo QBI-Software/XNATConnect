@@ -22,7 +22,7 @@ import pandas
 import logging
 
 class OPEXReport(object):
-    def __init__(self, subjects=None, csvfile=None):
+    def __init__(self, subjects=None, csvfile=None, opexfile=None):
         """
         List of subjects from XNAT as collection
         :param subjects:
@@ -34,15 +34,16 @@ class OPEXReport(object):
         self.minmth = 0
         self.maxmth = 12
         self.cache = csvfile
+        self.opexfile = opexfile
         self.xnat = None
         try:
-            resource_file = join(expanduser('~'), 'opex.csv')
-            self.opex = pandas.read_csv(resource_file)
-            msg = 'OPEX Resources loaded: %s from %s' % (not self.opex.empty, resource_file)
+            self.opex = pandas.read_csv(self.opexfile)
+            msg = 'OPEX Resources loaded: %s from %s' % (not self.opex.empty, self.opexfile)
             logging.info(msg)
         except Exception as e:
             msg = 'OPEX Resources NOT loaded: %s' % (e.args[0])
             logging.error(msg)
+            raise IOError(e)
 
         #self.exptintervals = self.__experiments()
         if csvfile is not None:
@@ -423,7 +424,7 @@ if __name__ == "__main__":
             subjects = xnat.getSubjectsDataframe(projectcode)
             msg = "Loaded %d subjects from %s : %s" % (len(subjects), database, projectcode)
             print msg
-            op = OPEXReport(subjects=subjects)
+            op = OPEXReport(subjects=subjects, opexfile=join('resources','opex.csv'))
             op.xnat = xnat
             df = op.getParticipants()
             print df
