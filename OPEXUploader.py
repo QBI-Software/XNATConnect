@@ -374,7 +374,9 @@ if __name__ == "__main__":
                 raise ConnectionError(msg)
             # List available subjects in project
             if (uploader.args.subjects is not None and uploader.args.subjects):
-                logging.info("Calling List Subjects")
+                msg = "Calling List Subjects"
+                print msg
+                logging.info(msg)
                 uploader.xnat.list_subjects_all(projectcode)
             # List available projects
             if (uploader.args.projects is not None and uploader.args.projects):
@@ -633,6 +635,7 @@ if __name__ == "__main__":
                     msg = 'Running Visit dates update: %s' % inputfile
                     logging.info(msg)
                     dp = VisitParser(inputfile, 1, 1)
+                    dp.updateGenders(projectcode,uploader.xnat)
                     dp.processData(projectcode, uploader.xnat)
 
         else:

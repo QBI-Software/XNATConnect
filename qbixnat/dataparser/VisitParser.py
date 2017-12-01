@@ -43,12 +43,53 @@ class VisitParser(DataParser):
                 skwargs['gender'] = gender
 
         return skwargs
+
     def futureDate(self, d):
+        """
+        Check if date is in future
+        :param d: date as datetime
+        :return: true if is in future
+        """
         thisdate = datetime.today()
         return d > thisdate
 
+    def updateGenders(self, projectcode=None, xnat=None):
+        """
+        UPdate gender info
+        :param projectcode:
+        :param xnat:
+        :return:
+        """
+        xnatgenders={'F':'female', 'M': 'male'}
+        for i, sd in self.data.iterrows():
+            subject_id = sd['ID'].replace(" ", "")
+            g = sd['Sex']
+            if g == 'U':
+                continue
+            gender = xnatgenders[g]            # if subject in database, else skip
+
+            if xnat is not None:
+                project = xnat.get_project(projectcode)
+                s = project.subject(subject_id)
+                if not s.exists():
+                    continue
+                xgender = s.attrs.get('gender')
+                if gender != xgender:
+                    s.attrs.mset({'gender': gender})
+                    msg = 'Subject gender updated: %s to %s' % (subject_id, gender)
+                    print msg
+                    logging.info(msg)
+            else:
+                msg = 'Subject gender to update: %s to %s' % (subject_id, gender)
+                print msg
 
     def processData(self, projectcode=None, xnat=None):
+        """
+        Process data from file - upload to XNAT per expt
+        :param projectcode: XNAT project code (eg P1)
+        :param xnat: XnatConnector obj
+        :return: nothing
+        """
         intvals = [str(i) for i in range(0, 13)]
         for i, sd in self.data.iterrows():
             subject_id = sd['ID'].replace(" ", "")
@@ -159,7 +200,7 @@ if __name__ == "__main__":
 
              ''')
 
-    parser.add_argument('--file', action='store', help='File with data', default="sampledata\\visit\\Visits_genders.xlsx")
+    parser.add_argument('--file', action='store', help='File with data', default="Q:\\DATA\\DATA ENTRY\\XnatUploaded\\sampledata\\visit\\Visits.xlsx")
     parser.add_argument('--sheet', action='store', help='Sheet name to extract', default=1)
     args = parser.parse_args()
 
@@ -168,7 +209,9 @@ if __name__ == "__main__":
     try:
         print("Loading",inputfile)
         dp = VisitParser(inputfile,args.sheet,1)
-        dp.processData()
+        #dp.processData()
+        dp.updateGenders()
+
     except Exception as e:
         print e
 

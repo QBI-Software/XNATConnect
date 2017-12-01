@@ -35,7 +35,7 @@ class OPEXReport(object):
         self.cache = csvfile
         self.xnat = None
         self.opex = pandas.read_csv(join('resources', 'opex.csv'))
-        self.exptintervals = self.__experiments()
+        #self.exptintervals = self.__experiments()
         if csvfile is not None:
             self.data = pandas.read_csv(csvfile)
         if subjects is not None:
@@ -49,58 +49,59 @@ class OPEXReport(object):
             self.subjectids = self.data.Subject.unique()
             print "Subject IDs loaded from file"
 
-    def __experiments(self):
-        """Create list of experiments in set order"""
-        fields = [('Health', 3),
-                  ('ACER', 6),
-                  ('CANTAB DMS', 1),
-                  ('CANTAB ERT', 1),
-                  ('CANTAB MOT', 1),
-                  ('CANTAB PAL', 1),
-                  ('CANTAB SWM', 1),
-                  ('VWM', 3),
-                  ('PSQI', 3),
-                  ('DASS', 3),
-                  ('IPAQ', 3),
-                  ('Insomnia', 3),
-                  ('Godin', 3),
-                  ('COBAS', 1),
-                  ('ELISAS', 1),
-                  ('MULTIPLEX', 1),
-                  ('MR Sessions', 6),
-                  ('MRI ASHS', 6),
-                  ('MRI FS', 6),
-                  ('DEXA',3),
-                  ('COSMED',3)]
-        od = OrderedDict(fields)
-        return od
+    # def __experiments(self):
+    #     """Create list of experiments in set order"""
+    #     fields = [('Health', 3),
+    #               ('ACER', 6),
+    #               ('CANTAB DMS', 1),
+    #               ('CANTAB ERT', 1),
+    #               ('CANTAB MOT', 1),
+    #               ('CANTAB PAL', 1),
+    #               ('CANTAB SWM', 1),
+    #               ('VWM', 3),
+    #               ('PSQI', 3),
+    #               ('DASS', 3),
+    #               ('IPAQ', 3),
+    #               ('Insomnia', 3),
+    #               ('Godin', 3),
+    #               ('COBAS', 1),
+    #               ('ELISAS', 1),
+    #               ('MULTIPLEX', 1),
+    #               ('MR Sessions', 6),
+    #               ('MRI ASHS', 6),
+    #               ('MRI FS', 6),
+    #               ('DEXA',3),
+    #               ('COSMED',3)]
+    #     od = OrderedDict(fields)
+    #     return od
+    #
+    # def _expt_types(self):
+    #     """Create list of experiments in set order"""
+    #     fields = [('Health', 'opex:health'),
+    #               ('ACER', 'opex:acer'),
+    #               ('CANTAB DMS', 'opex:cantabDMS'),
+    #               ('CANTAB ERT', 'opex:cantabERT'),
+    #               ('CANTAB MOT', 'opex:cantabMOT'),
+    #               ('CANTAB PAL', 'opex:cantabPAL'),
+    #               ('CANTAB SWM', 'opex:cantabSWM'),
+    #               ('COBAS', 'opex:bloodCobasData'),
+    #               ('ELISAS', 'opex:bloodElisasData'),
+    #               ('MULTIPLEX', 'opex:bloodMultiplexData'),
+    #               ('MR Sessions', 'xnat:mrSessionData'),
+    #               ('MRI ASHS', 'opex:mriashs'),
+    #               ('MRI FS', 'opex:mrifs'),
+    #               ('DEXA','opex:dexa'),
+    #               ('COSMED', 'opex:cosmed'),
+    #               ('VWM', 'opex:amunet'),
+    #               ('PSQI', 'opex:psqi'),
+    #               ('DASS', 'opex:dass'),
+    #               ('IPAQ', 'opex:ipaq'),
+    #               ('Insomnia', 'opex:insomnia'),
+    #               ('Godin', 'opex:godin')
+    #               ]
+    #     od = OrderedDict(fields)
+    #     return od
 
-    def _expt_types(self):
-        """Create list of experiments in set order"""
-        fields = [('Health', 'opex:health'),
-                  ('ACER', 'opex:acer'),
-                  ('CANTAB DMS', 'opex:cantabDMS'),
-                  ('CANTAB ERT', 'opex:cantabERT'),
-                  ('CANTAB MOT', 'opex:cantabMOT'),
-                  ('CANTAB PAL', 'opex:cantabPAL'),
-                  ('CANTAB SWM', 'opex:cantabSWM'),
-                  ('COBAS', 'opex:bloodCobasData'),
-                  ('ELISAS', 'opex:bloodElisasData'),
-                  ('MULTIPLEX', 'opex:bloodMultiplexData'),
-                  ('MR Sessions', 'xnat:mrSessionData'),
-                  ('MRI ASHS', 'opex:mriashs'),
-                  ('MRI FS', 'opex:mrifs'),
-                  ('DEXA','opex:dexa'),
-                  ('COSMED', 'opex:cosmed'),
-                  ('VWM', 'opex:amunet'),
-                  ('PSQI', 'opex:psqi'),
-                  ('DASS', 'opex:dass'),
-                  ('IPAQ', 'opex:ipaq'),
-                  ('Insomnia', 'opex:insomnia'),
-                  ('Godin', 'opex:godin')
-                  ]
-        od = OrderedDict(fields)
-        return od
 
     def getParticipants(self):
         """
@@ -153,7 +154,7 @@ class OPEXReport(object):
         else:
             df = df.sort_values('CANTAB DMS', ascending=True)
         # plot - exclude Subject, m/f,hand,yob
-        cols = ['Group', 'Subject'] + self.exptintervals.keys()
+        cols = ['Group', 'Subject'] + list(self.opex['Expt'])
         cols_present = [h for h in cols if h in df.columns]
         df = df[cols_present]
 
@@ -167,10 +168,10 @@ class OPEXReport(object):
         """
         result = []
         if subj is not None:
-            etypes = self._expt_types()
+            etypes = list(self.opex['xsitype']) #self._expt_types()
             result = [subj.attrs.get('group'), subj.label(), subj.attrs.get('gender')]
             counts = self.xnat.getExptCounts(subj)
-            for expt in self.exptintervals.keys():
+            for expt in list(self.opex['Expt']):
                 etype = etypes[expt]
                 if (etype in counts):
                     result.append(counts[etype])
@@ -191,7 +192,7 @@ class OPEXReport(object):
             v0 = df_counts.filter(regex="_visit", axis=1)
             v = v0.replace(['',np.nan], 'ZZZZZZZ')
             df_counts['first_visit'] = v.min(axis=1, skipna=True)
-            df_counts.replace([np.inf, -np.inf, np.nan], 0, inplace=True)
+            df_counts.replace([np.inf, -np.inf, np.nan, 'ZZZZZZZ'], 0, inplace=True)
             dfsubjects = self.formatCounts(df_counts)
             self.data = dfsubjects
         else:
@@ -209,9 +210,10 @@ class OPEXReport(object):
         # Cannot load all at once nor can get count directly so loop through each datatype and compile counts
         for etype in etypes:
             print "Expt type:", etype
-            if etype.startswith('opex'):
+            if etype.startswith('opex')or etype=='xnat:mrSessionData':
                 #fields = self.conn.inspect.datatypes(etype)
-                columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL',etype + '/DATA_VALID',etype + '/SAMPLE_QUALITY']
+                #columns = [etype + '/ID',etype + '/SUBJECT_ID',etype + '/DATE',etype + '/INTERVAL',etype + '/DATA_VALID',etype + '/SAMPLE_QUALITY']
+                columns = [etype + '/ID', etype + '/SUBJECT_ID', etype + '/DATE']
                 criteria = [(etype + '/SUBJECT_ID', 'LIKE', '*'), 'AND']
                 df_dates = self.xnat.getSubjectsDataframe(projectcode, etype, columns, criteria)
                 if df_dates is not None:
@@ -260,19 +262,18 @@ class OPEXReport(object):
         if not df_counts.empty:
             # print(df_counts.columns)
             df_counts['MONTH'] = df_counts['first_visit'].apply(lambda d: self.getMONTH(d))
-            etypes = self._expt_types()
             # rename columns
             df_counts.rename(columns={'sub_group': 'Group', 'subject_label': 'Subject', 'gender_text': 'M/F'},
                              inplace=True)
-            for etype in etypes:
-                df_counts.rename(columns={etypes[etype]: etype}, inplace=True)
+            for i in range(len(self.opex)):
+                df_counts.rename(columns={self.opex['xsitype'].iloc[i]: self.opex['Expt'].iloc[i]}, inplace=True)
             # reorder columns
-            headers = ['MONTH', 'Subject', 'Group', 'M/F'] + self.exptintervals.keys()
+            headers = ['MONTH', 'Subject', 'Group', 'M/F'] + list(self.opex['Expt'])
             headers_present = [h for h in headers if h in df_counts.columns]
             df_counts = df_counts[headers_present]
             # save to file as cache if db down
             df_counts.to_csv(self.cache, index=False)
-            # print df_counts.head()
+            print df_counts.head()
 
         return df_counts
 
@@ -310,12 +311,15 @@ class OPEXReport(object):
         :param row:
         :return:
         """
-        for hdr in self.exptintervals.keys():
+        for i, info in self.opex.iterrows():
             # print row
+            hdr = info['Expt']
             if hdr in row:
-                # print "1.",hdr, "=", row[hdr]
-                row[hdr] = len(range(self.minmth, row['MONTH'], self.exptintervals[hdr])) - row[hdr]
-                # print "2.",hdr, "=", row[hdr]
+                #if reached max - none missing
+                if row[hdr] >= info['total']:
+                    row[hdr] = 0
+                else:
+                    row[hdr] = len(range(self.minmth, row['MONTH'], info['interval'])) - row[hdr]
         return row
 
     def printMissingExpts(self, projectcode=None):
@@ -330,7 +334,7 @@ class OPEXReport(object):
         # Filter groups
         if 'Group' in data.columns:
             data = data[data.Group != 'withdrawn']
-        headers = ['MONTH', 'Subject'] + self.exptintervals.keys()
+        headers = ['MONTH', 'Subject'] + list(self.opex['Expt'])
         headers_present = [h for h in headers if h in data.columns]
         report = data[headers_present]
         if 'MONTH' not in report:
@@ -348,7 +352,7 @@ class OPEXReport(object):
         :return:
         """
         expts = pandas.DataFrame([e for e in expts])
-        expts
+        print expts
 
         # Group
         # df_grouped = groups.groupby(by='Group')
