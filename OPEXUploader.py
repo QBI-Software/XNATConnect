@@ -347,7 +347,7 @@ if __name__ == "__main__":
     parser.add_argument('--dexa', action='store', help='Upload DEXA data from directory')
     parser.add_argument('--cosmed', action='store', help='Upload COSMED data from directory')
     parser.add_argument('--cosmed_subdir', action='store', help='COSMED subdirectory',
-                        default="VO2data_crosschecked_20170926")
+                        default="VO2data_crosschecked")
     parser.add_argument('--cosmed_datafile', action='store', help='COSMED VO2 datafile',
                         default='VO2data_VEVCO2_20171009.xlsx')
     parser.add_argument('--visit', action='store', help='Update visit dates',

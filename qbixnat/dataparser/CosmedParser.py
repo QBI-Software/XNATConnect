@@ -90,9 +90,14 @@ class CosmedParser():
         try:
             for f in self.files:
                 filename = basename(f)
+
                 if "MonthA" in filename or filename.startswith('~') or filename.startswith('VO2'):
                     continue
+                print "File: ", filename
                 fdata = self.parseFilename(filename)
+                if fdata is None:
+                    logging.warning('Skipping file: %s', filename)
+                    continue
                 df_file_data = pd.read_excel(f, header=0, sheetname='Data')
                 # Replace LEVEL with int
                 df_file_data['Dyspnea'] = df_file_data['Dyspnea'].apply(lambda r: self.extractLevel(r))
@@ -111,7 +116,7 @@ class CosmedParser():
                 effdata = self.parseEfficiency(self.effdata, fdata[0], self.effdata_cols[fdata[1]])
                 recoverydata = self.calcRecovery(df_data_ex, df_data_rec)
                 row = fdata + protocoldata + metabolicdata + cardiodata + effdata + recoverydata
-                print "Row appended:", row
+                logging.debug("Row appended:%s", row)
                 # Generate phase data as separate tab
                 self.writePhasedata(f, df_file_data, df_file_results)
             # Create dataframe with dict in one hist - more efficient
@@ -126,6 +131,8 @@ class CosmedParser():
                 logging.info(msg)
                 print msg
                 rtn = True
+            else:
+                logging.error("Data not loaded: %d", len(self.data))
         except Exception as e:
             if f is not None:
                 msg = 'File: %s - %s' % (f, e)
@@ -150,16 +157,26 @@ class CosmedParser():
             return int(dval[1])
 
     def parseFilename(self, filename):
+        """
+        Splits filename to get information
+        If syntax is wrong - this will fail TODO: replace with regex
+        :param filename:
+        :return:
+        """
         fparts = filename.split("_")
-        # split to ID, interval, date
-        self.data['SubjectID'].append(fparts[0])
-        self.data['interval'].append(fparts[1][0])
-        self.data['date'].append(fparts[3][0:8])
-        self.data['filename'].append(filename)
-        results = [self.data[f][-1] for f in ['SubjectID', 'interval', 'date', 'filename']]
-        msg = 'Filedata: %s' % ",".join(results)
-        print(msg)
-        logging.debug(msg)
+        if len(fparts) == 4:
+            # split to ID, interval, date
+            self.data['SubjectID'].append(fparts[0])
+            self.data['interval'].append(fparts[1][0])
+            self.data['date'].append(fparts[3][0:8])
+            self.data['filename'].append(filename)
+            results = [self.data[f][-1] for f in ['SubjectID', 'interval', 'date', 'filename']]
+            msg = 'Filedata: %s' % ",".join(results)
+            print(msg)
+            logging.debug(msg)
+        else:
+            logging.error('Filename syntax is different: %s', filename)
+            results= None
         return results
 
     def parseProtocol(self, df_results, df_data_ex, fieldnames):
@@ -251,7 +268,7 @@ class CosmedParser():
                     d=''
                 self.data[fields[i]].append(d)
         loadeddata = [self.data[f][-1] for f in fields.itervalues()]
-        # logging.debug('Recovery:', loadeddata)
+        logging.debug('Recovery:', loadeddata)
         return loadeddata
 
     def parseEfficiency(self, df_data, sid, intervals):
@@ -273,7 +290,7 @@ class CosmedParser():
         self.data['VeVCO2 Slope'].append(data[0])
         self.data['VEVCO2 intercept'].append(data[1])
         self.data['OUES'].append(data[2])
-        # logging.debug("Efficiency:",data)
+        logging.debug("Efficiency:",data)
         return data
 
     def getTimesIntervals(self, row, n):
@@ -460,7 +477,7 @@ if __name__ == "__main__":
     parser.add_argument('--filedir', action='store', help='Directory containing files', default="sampledata\\cosmed")
     parser.add_argument('--subdir', action='store', help='Subdirectory with individual files',
                         default="VO2data_crosschecked")
-    parser.add_argument('--datafile', action='store', help='VEVCO2 file', default='VO2data_VEVCO2_20171009.xlsx')
+    parser.add_argument('--datafile', action='store', help='VEVCO2 file', default='VO2data_VEVCO2.xlsx')
     parser.add_argument('--fields', action='store', help='Fields to extract',
                         default="resources\\cosmed_fields.xlsx")
     args = parser.parse_args()
