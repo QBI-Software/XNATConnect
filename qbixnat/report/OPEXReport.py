@@ -36,20 +36,14 @@ class OPEXReport(object):
         self.cache = csvfile
         self.xnat = None
         try:
-            self.opex = pandas.read_csv(join('resources', 'opex.csv'))
-            msg = 'OPEX Resources loaded: %s from %s' % (self.opex.empty, join('resources', 'opex.csv'))
+            resource_file = join(getcwd(),'resources', 'opex.csv')#join(expanduser('~'), 'opex.csv')
+            self.opex = pandas.read_csv(resource_file)
+            msg = 'OPEX Resources loaded: %s from %s' % (not self.opex.empty, resource_file)
             logging.info(msg)
-        except:
-            self.opex = pandas.read_csv(join(getcwd(),'resources', 'opex.csv'))
-            msg = 'OPEX Resources loaded: %s from %s' % (self.opex.empty, join(getcwd(),'resources', 'opex.csv'))
-            logging.info(msg)
-            if self.opex.empty:
-                self.opex = pandas.read_csv(join(expanduser('~'), 'opex.csv'))
-                msg = 'OPEX Resources loaded: %s from %s' % (self.opex.empty, join(expanduser('~'), 'opex.csv'))
-                logging.info(msg)
-        finally:
-            msg ='Resources load finished'
-            logging.info(msg)
+        except Exception as e:
+            msg = 'OPEX Resources NOT loaded: %s [%s]' % (not self.opex.empty, e.args[0])
+            logging.error(msg)
+
         #self.exptintervals = self.__experiments()
         if csvfile is not None:
             self.data = pandas.read_csv(csvfile)
