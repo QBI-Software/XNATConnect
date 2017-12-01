@@ -36,7 +36,7 @@ class OPEXReport(object):
         self.cache = csvfile
         self.xnat = None
         try:
-            resource_file = join(getcwd(),'resources', 'opex.csv')#join(expanduser('~'), 'opex.csv')
+            resource_file = join(expanduser('~'), 'opex.csv')
             self.opex = pandas.read_csv(resource_file)
             msg = 'OPEX Resources loaded: %s from %s' % (not self.opex.empty, resource_file)
             logging.info(msg)
