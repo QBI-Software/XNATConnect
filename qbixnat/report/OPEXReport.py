@@ -15,10 +15,11 @@ from collections import OrderedDict
 from datetime import datetime
 from os.path import expanduser
 from os.path import join
+from os import getcwd
 
 import numpy as np
 import pandas
-
+import logging
 
 class OPEXReport(object):
     def __init__(self, subjects=None, csvfile=None):
@@ -34,7 +35,17 @@ class OPEXReport(object):
         self.maxmth = 12
         self.cache = csvfile
         self.xnat = None
-        self.opex = pandas.read_csv(join('resources', 'opex.csv'))
+        try:
+            self.opex = pandas.read_csv(join('resources', 'opex.csv'))
+            msg = 'OPEX Resources loaded: %s from %s' % (self.opex.empty, join('resources', 'opex.csv'))
+        except:
+            self.opex = pandas.read_csv(join(getcwd(),'resources', 'opex.csv'))
+            msg = 'OPEX Resources loaded: %s from %s' % (self.opex.empty, join(getcwd(),'resources', 'opex.csv'))
+            if self.opex.empty:
+                self.opex = pandas.read_csv(join(expanduser('~'), 'opex.csv'))
+                msg = 'OPEX Resources loaded: %s from %s' % (self.opex.empty, join(expanduser('~'), 'opex.csv'))
+        finally:
+            logging.info(msg)
         #self.exptintervals = self.__experiments()
         if csvfile is not None:
             self.data = pandas.read_csv(csvfile)
