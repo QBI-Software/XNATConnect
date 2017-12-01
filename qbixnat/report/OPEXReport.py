@@ -41,7 +41,7 @@ class OPEXReport(object):
             msg = 'OPEX Resources loaded: %s from %s' % (not self.opex.empty, resource_file)
             logging.info(msg)
         except Exception as e:
-            msg = 'OPEX Resources NOT loaded: %s [%s]' % (not self.opex.empty, e.args[0])
+            msg = 'OPEX Resources NOT loaded: %s' % (e.args[0])
             logging.error(msg)
 
         #self.exptintervals = self.__experiments()
