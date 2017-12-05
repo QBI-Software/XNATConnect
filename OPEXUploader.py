@@ -187,7 +187,7 @@ class OPEXUploader():
                         elif ('FS' in xsdtypes or 'COBAS' in xsdtypes):
                             xsd = dp.getxsd()[dp.type]
                             (mandata, data) = dp.mapData(row, i, xsd)
-                            if dp.opex is not None:
+                            if hasattr(dp,'opex'):
                                 prefix = dp.opex['prefix'][dp.opex['xsitype'] == xsd]
                             else:
                                 prefix = dp.type

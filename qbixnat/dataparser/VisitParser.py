@@ -100,13 +100,18 @@ class VisitParser(DataParser):
                 if not s.exists():
                     continue
             # get each experiment and check date matches - these are upload dates by default
-            for expt in ['DEXA', 'COBAS', 'ELISAS', 'MULTIPLEX', 'MRI ASHS', 'MRI FS']:
+            for expt in ['DEXA', 'COBAS', 'ELISAS', 'MULTIPLEX', 'MRI ASHS', 'MRI FS', 'FMRI']:
                 prefix = self.opex['prefix'][self.opex['Expt'] == expt].values[0]
                 xtype = self.opex['xsitype'][self.opex['Expt'] == expt].values[0]
                 if xnat is not None and s is not None:
                     xexpts = s.experiments(prefix + '_*')
                     if len(xexpts.fetchall()) <=0:
-                        continue
+                        if expt =='FMRI': #IDS are OPEXNAT*
+                            labels = [e.label() for e in s.experiments('OPEXNAT*') if e.label().startswith(expt)]
+                            if len(labels) <= 0:
+                                continue
+                        else:
+                            continue
 
                 for intval in intvals:
                     if expt in ['COBAS', 'ELISAS', 'MULTIPLEX']:
@@ -164,7 +169,7 @@ class VisitParser(DataParser):
                                         msg = '%s date updated %s' % (xnatexpt.id(), d)
                                         logging.info(msg)
                     else:
-                        if expt in ['MRI ASHS', 'MRI FS']:
+                        if expt in ['MRI ASHS', 'MRI FS', 'FMRI']:
                             eint = "MRI_" + intval
                         else:
                             eint = expt + "_" + intval
@@ -181,10 +186,14 @@ class VisitParser(DataParser):
                                 if xnatexpt is not None:
                                     # remove or update comment
                                     comments = xnatexpt.attrs.get(xtype + '/comments')
-                                    if comments.startswith('; Date updated'):
-                                        xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
+                                    if len(comments) > 0:
+                                        if not 'Date updated' in comments:
+                                            xnatexpt.attrs.set(xtype + '/comments', comments + '; Date updated')
+                                        #replace if multiple
+                                        elif comments.startswith('Date updated'):
+                                            xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
                                     else:
-                                        xnatexpt.attrs.set(xtype + '/comments', comments + '; Date updated')
+                                        xnatexpt.attrs.set(xtype + '/comments', 'Date updated')
                                     msg = '%s date updated %s' % (xnatexpt.id(), d)
                                     logging.info(msg)
 

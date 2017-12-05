@@ -20,3 +20,4 @@ MRI ASHS,6,3,opex:mriashs,ASHS
 MRI FS,6,3,opex:mrifs,FS
 DEXA,3,5,opex:dexa,DXA
 COSMED,3,5,opex:cosmed,COS
+FMRI,6,3,opex:fmri,FMRI
