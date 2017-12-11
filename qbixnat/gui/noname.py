@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- 
 
 ###########################################################################
-## Python code generated with wxFormBuilder (version Jun 17 2015)
+## Python code generated with wxFormBuilder (version Dec 21 2016)
 ## http://www.wxformbuilder.org/
 ##
 ## PLEASE DO "NOT" EDIT THIS FILE!
@@ -26,7 +26,7 @@ class UploaderGUI ( wx.Frame ):
 		
 		self.m_staticText1 = wx.StaticText( self, wx.ID_ANY, u"Upload Data to XNAT", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText1.Wrap( -1 )
-		self.m_staticText1.SetFont( wx.Font( 12, 71, 90, 92, False, wx.EmptyString ) )
+		self.m_staticText1.SetFont( wx.Font( 12, wx.FONTFAMILY_DECORATIVE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, wx.EmptyString ) )
 		
 		bSizer1.Add( self.m_staticText1, 0, wx.ALL, 5 )
 		
@@ -51,6 +51,14 @@ class UploaderGUI ( wx.Frame ):
 		self.projectedit = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), 0 )
 		fgSizer2.Add( self.projectedit, 0, wx.ALL, 5 )
 		
+		self.m_staticText5 = wx.StaticText( self, wx.ID_ANY, u"Data Type", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText5.Wrap( -1 )
+		fgSizer2.Add( self.m_staticText5, 0, wx.ALL, 5 )
+		
+		chOptionsChoices = []
+		self.chOptions = wx.ComboBox( self, wx.ID_ANY, u"Select data", wx.DefaultPosition, wx.Size( 200,-1 ), chOptionsChoices, 0 )
+		fgSizer2.Add( self.chOptions, 0, wx.ALL, 5 )
+		
 		self.m_staticText4 = wx.StaticText( self, wx.ID_ANY, u"Input/Output directory", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText4.Wrap( -1 )
 		self.m_staticText4.SetToolTipString( u"Provide input directory containing data files for upload OR output directory for CSV downloads" )
@@ -68,7 +76,7 @@ class UploaderGUI ( wx.Frame ):
 		
 		fgSizer2.Add( bSizer2, 1, wx.EXPAND, 5 )
 		
-		self.m_staticText6 = wx.StaticText( self, wx.ID_ANY, u"Report Only (output)", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText6 = wx.StaticText( self, wx.ID_ANY, u"Report Only (output directory reqd)", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText6.Wrap( -1 )
 		fgSizer2.Add( self.m_staticText6, 0, wx.ALL, 5 )
 		
@@ -93,14 +101,6 @@ class UploaderGUI ( wx.Frame ):
 		
 		self.m_staticline3 = wx.StaticLine( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.LI_HORIZONTAL )
 		fgSizer2.Add( self.m_staticline3, 0, wx.EXPAND |wx.ALL, 5 )
-		
-		self.m_staticText5 = wx.StaticText( self, wx.ID_ANY, u"Data Type", wx.DefaultPosition, wx.DefaultSize, 0 )
-		self.m_staticText5.Wrap( -1 )
-		fgSizer2.Add( self.m_staticText5, 0, wx.ALL, 5 )
-		
-		chOptionsChoices = []
-		self.chOptions = wx.ComboBox( self, wx.ID_ANY, u"Select data", wx.DefaultPosition, wx.Size( 200,-1 ), chOptionsChoices, 0 )
-		fgSizer2.Add( self.chOptions, 0, wx.ALL, 5 )
 		
 		self.cbChecks = wx.CheckBox( self, wx.ID_ANY, u"TEST RUN only", wx.DefaultPosition, wx.DefaultSize, 0 )
 		fgSizer2.Add( self.cbChecks, 0, wx.ALL, 5 )
@@ -127,6 +127,7 @@ class UploaderGUI ( wx.Frame ):
 		self.btnRun = wx.Button( self, wx.ID_ANY, u"RUN", wx.DefaultPosition, wx.DefaultSize, 0|wx.SIMPLE_BORDER )
 		self.btnRun.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.btnRun.SetBackgroundColour( wx.Colour( 0, 128, 64 ) )
+		self.btnRun.Enable( False )
 		
 		bSizer4.Add( self.btnRun, 0, wx.ALL, 5 )
 		
@@ -155,6 +156,7 @@ class UploaderGUI ( wx.Frame ):
 		self.Centre( wx.BOTH )
 		
 		# Connect Events
+		self.chOptions.Bind( wx.EVT_COMBOBOX, self.OnSelectData )
 		self.inputedit.Bind( wx.EVT_TEXT_ENTER, self.OnEditDirname )
 		self.btnInputdir.Bind( wx.EVT_BUTTON, self.OnOpen )
 		self.btnDownload.Bind( wx.EVT_BUTTON, self.OnDownload )
@@ -170,6 +172,9 @@ class UploaderGUI ( wx.Frame ):
 	
 	
 	# Virtual event handlers, overide them in your derived class
+	def OnSelectData( self, event ):
+		event.Skip()
+	
 	def OnEditDirname( self, event ):
 		event.Skip()
 	
@@ -211,20 +216,21 @@ class dlgScans ( wx.Dialog ):
 		
 		bSizer5 = wx.BoxSizer( wx.VERTICAL )
 		
-		self.m_staticText13 = wx.StaticText( self, wx.ID_ANY, u"Organizes scans into correct directory structure for XNAT uploads.", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText13 = wx.StaticText( self, wx.ID_ANY, u"Organizes scans into the correct directory structure for XNAT uploads.  \n-  Input directory must contain *.IMA or *.DCM files.\n-  Ignore directory contains already uploaded scans (eg 'done')", wx.DefaultPosition, wx.Size( 600,60 ), 0|wx.SUNKEN_BORDER )
 		self.m_staticText13.Wrap( -1 )
-		self.m_staticText13.SetFont( wx.Font( wx.NORMAL_FONT.GetPointSize(), 70, 90, 92, False, wx.EmptyString ) )
+		self.m_staticText13.SetFont( wx.Font( wx.NORMAL_FONT.GetPointSize(), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, wx.EmptyString ) )
 		
 		bSizer5.Add( self.m_staticText13, 0, wx.ALL, 5 )
 		
-		self.chkOPEX = wx.CheckBox( self, wx.ID_ANY, u"OPEX IDs", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.chkOPEX = wx.CheckBox( self, wx.ID_ANY, u"OPEX IDs : extract Subject ID as first 6 characters", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.chkOPEX.SetValue(True) 
 		bSizer5.Add( self.chkOPEX, 0, wx.ALL, 5 )
 		
 		fgSizer2 = wx.FlexGridSizer( 0, 2, 0, 0 )
 		fgSizer2.SetFlexibleDirection( wx.BOTH )
 		fgSizer2.SetNonFlexibleGrowMode( wx.FLEX_GROWMODE_SPECIFIED )
 		
-		self.m_staticText10 = wx.StaticText( self, wx.ID_ANY, u"Input (IMA)", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText10 = wx.StaticText( self, wx.ID_ANY, u"Input directory", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText10.Wrap( -1 )
 		self.m_staticText10.SetToolTipString( u"Expects: SUBJECTID/Group/*.IMA (mixed series)" )
 		
@@ -233,7 +239,7 @@ class dlgScans ( wx.Dialog ):
 		self.txtInputScans = wx.DirPickerCtrl( self, wx.ID_ANY, wx.EmptyString, u"Select a folder for input", wx.DefaultPosition, wx.Size( 430,-1 ), wx.DIRP_DEFAULT_STYLE|wx.DIRP_DIR_MUST_EXIST )
 		fgSizer2.Add( self.txtInputScans, 0, wx.ALL, 5 )
 		
-		self.m_staticText11 = wx.StaticText( self, wx.ID_ANY, u"Scans to", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText11 = wx.StaticText( self, wx.ID_ANY, u"Output sorted scans", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText11.Wrap( -1 )
 		self.m_staticText11.SetToolTipString( u"Outputs format: sortedscans/SUBJECTID/scans/series/*.IMA" )
 		
@@ -242,7 +248,7 @@ class dlgScans ( wx.Dialog ):
 		self.txtOutputScans = wx.DirPickerCtrl( self, wx.ID_ANY, wx.EmptyString, u"Select a folder", wx.DefaultPosition, wx.Size( 430,-1 ), wx.DIRP_DEFAULT_STYLE|wx.DIRP_DIR_MUST_EXIST )
 		fgSizer2.Add( self.txtOutputScans, 0, wx.ALL, 5 )
 		
-		self.m_staticText12 = wx.StaticText( self, wx.ID_ANY, u"Ignore (optional)", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText12 = wx.StaticText( self, wx.ID_ANY, u"Ignore directory (optional)", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText12.Wrap( -1 )
 		self.m_staticText12.SetToolTipString( u"Optional - ignore these files (already done)" )
 		

@@ -185,32 +185,48 @@ class OPEXUploaderGUI(UploaderGUI):
         if self.dirname is None or len(self.dirname) <=0:
             dlg = wx.MessageDialog(self, "Please specify output directory", "OPEX Report", wx.OK)
             dlg.ShowModal()  # Show it
-            dlg.Destroy()
         else:
-            runoption =['--output', self.dirname]
-            (db, proj) = self.__loadConnection()
-            if db is None:
-                return 0
-            options = [db, proj, " ".join(runoption) ]
-            cmd = self.__loadCommand(options, 1)
-            self.tcResults.AppendText(cmd)
-            self.tcResults.AppendText("\n*******\n")
-            try:
-                output = subprocess.check_output(cmd, shell=True)
-                self.tcResults.AppendText(output)
-                self.tcResults.AppendText("\n***FINISHED***\n")
-            except subprocess.CalledProcessError as e:
-                retcode = e.returncode
-                if retcode < 0:
-                    msg = "Program was terminated by signal [" + str(retcode) + "]"
-                    print >> sys.stderr, msg
-                elif retcode == 1:
-                    msg = "Program ran successfully [" + str(retcode) + "]"
-                    print >> sys.stderr, msg
-                else:
-                    msg = "Program error [" + str(retcode) + "] - check output"
-                    print >> sys.stderr, msg
-                self.tcResults.AppendText(msg)
+            msg = "Check output directory for downloads: %s" % self.dirname
+            dlg = wx.MessageDialog(self,msg , "OPEX Report", wx.OK)
+            if dlg.ShowModal() == wx.ID_OK:
+
+                runoption =['--output', self.dirname]
+                (db, proj) = self.__loadConnection()
+                if db is None:
+                    return 0
+                options = [db, proj, " ".join(runoption) ]
+                cmd = self.__loadCommand(options, 1)
+                self.tcResults.AppendText(cmd)
+                self.tcResults.AppendText("\n*******\n")
+                try:
+                    output = subprocess.check_output(cmd, shell=True)
+                    self.tcResults.AppendText(output)
+                    self.tcResults.AppendText("\n***FINISHED***\n")
+                except subprocess.CalledProcessError as e:
+                    retcode = e.returncode
+                    if retcode < 0:
+                        msg = "Program was terminated by signal [" + str(retcode) + "]"
+                        print >> sys.stderr, msg
+                    elif retcode == 1:
+                        msg = "Program ran successfully [" + str(retcode) + "]"
+                        print >> sys.stderr, msg
+                    else:
+                        msg = "Program error [" + str(retcode) + "] - check output"
+                        print >> sys.stderr, msg
+                    self.tcResults.AppendText(msg)
+
+        dlg.Destroy()
+
+    def OnSelectData(self,event):
+        """
+        On data selection, enable Run
+        :param event:
+        :return:
+        """
+        if self.chOptions.GetStringSelection() != 'Select data':
+            self.btnRun.enable(True)
+        else:
+            self.btnRun.enable(False)
 
     def OnSubmit(self,event):
         """

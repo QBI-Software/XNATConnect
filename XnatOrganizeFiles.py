@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('inputdir', action='store', help='Top level file directory eg SUBJECTID')
     parser.add_argument('--scandir', action='store', help='Copy scans to this directory for upload to XNAT')
     parser.add_argument('--opexid', action='store_true', help='SUBJECTID directories in OPEX format eg 1001DS')
-    parser.add_argument('--ignore', action='store', help='')
+    parser.add_argument('--ignore', action='store', help='Ignore already processed - allows for repeated parsing over same dir (eg "done")')
     args = parser.parse_args()
     series ={}
     #pattern = '^([0-9A-Z_\.]+)(\d{4})\..*'
