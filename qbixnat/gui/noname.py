@@ -140,6 +140,9 @@ class UploaderGUI ( wx.Frame ):
 		self.btnAbout = wx.Button( self, wx.ID_ANY, u"About", wx.DefaultPosition, wx.DefaultSize, 0 )
 		bSizer4.Add( self.btnAbout, 0, wx.ALL, 5 )
 		
+		self.btnSettings = wx.Button( self, wx.ID_ANY, u"Settings", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer4.Add( self.btnSettings, 0, wx.ALL, 5 )
+		
 		self.btnCancel = wx.Button( self, wx.ID_ANY, u"Cancel", wx.DefaultPosition, wx.DefaultSize, 0 )
 		bSizer4.Add( self.btnCancel, 0, wx.ALL, 5 )
 		
@@ -165,6 +168,7 @@ class UploaderGUI ( wx.Frame ):
 		self.btnTest.Bind( wx.EVT_BUTTON, self.OnTest )
 		self.m_button7.Bind( wx.EVT_BUTTON, self.OnHelp )
 		self.btnAbout.Bind( wx.EVT_BUTTON, self.OnAbout )
+		self.btnSettings.Bind( wx.EVT_BUTTON, self.OnSettings )
 		self.btnCancel.Bind( wx.EVT_BUTTON, self.OnClose )
 	
 	def __del__( self ):
@@ -197,6 +201,9 @@ class UploaderGUI ( wx.Frame ):
 		event.Skip()
 	
 	def OnAbout( self, event ):
+		event.Skip()
+	
+	def OnSettings( self, event ):
 		event.Skip()
 	
 	def OnClose( self, event ):
@@ -277,5 +284,114 @@ class dlgScans ( wx.Dialog ):
 	
 	def __del__( self ):
 		pass
+	
+
+###########################################################################
+## Class dlgConfig
+###########################################################################
+
+class dlgConfig ( wx.Dialog ):
+	
+	def __init__( self, parent ):
+		wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"Configuration Settings", pos = wx.DefaultPosition, size = wx.Size( 405,254 ), style = wx.DEFAULT_DIALOG_STYLE )
+		
+		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+		
+		bSizer6 = wx.BoxSizer( wx.VERTICAL )
+		
+		self.m_staticText12 = wx.StaticText( self, wx.ID_ANY, u"Database connection parameters", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText12.Wrap( -1 )
+		self.m_staticText12.SetFont( wx.Font( 14, wx.FONTFAMILY_DECORATIVE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, wx.EmptyString ) )
+		
+		bSizer6.Add( self.m_staticText12, 0, wx.ALL, 5 )
+		
+		fgSizer3 = wx.FlexGridSizer( 6, 2, 0, 0 )
+		fgSizer3.SetFlexibleDirection( wx.BOTH )
+		fgSizer3.SetNonFlexibleGrowMode( wx.FLEX_GROWMODE_SPECIFIED )
+		
+		self.m_staticText13 = wx.StaticText( self, wx.ID_ANY, u"Database config", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText13.Wrap( -1 )
+		self.m_staticText13.SetToolTipString( u"Reference is used as 'Database Config' in main GUI" )
+		
+		fgSizer3.Add( self.m_staticText13, 0, wx.ALL, 5 )
+		
+		chConfigChoices = []
+		self.chConfig = wx.ComboBox( self, wx.ID_ANY, u"Enter config ref", wx.DefaultPosition, wx.DefaultSize, chConfigChoices, wx.CB_SORT )
+		fgSizer3.Add( self.chConfig, 0, wx.ALL, 5 )
+		
+		self.m_staticText14 = wx.StaticText( self, wx.ID_ANY, u"URL", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText14.Wrap( -1 )
+		fgSizer3.Add( self.m_staticText14, 0, wx.ALL, 5 )
+		
+		self.txtURL = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 300,-1 ), 0 )
+		fgSizer3.Add( self.txtURL, 0, wx.ALL, 5 )
+		
+		self.m_staticText15 = wx.StaticText( self, wx.ID_ANY, u"Username", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText15.Wrap( -1 )
+		fgSizer3.Add( self.m_staticText15, 0, wx.ALL, 5 )
+		
+		self.txtUser = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), 0 )
+		fgSizer3.Add( self.txtUser, 0, wx.ALL, 5 )
+		
+		self.m_staticText16 = wx.StaticText( self, wx.ID_ANY, u"Password", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText16.Wrap( -1 )
+		fgSizer3.Add( self.m_staticText16, 0, wx.ALL, 5 )
+		
+		self.txtPass = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), 0 )
+		fgSizer3.Add( self.txtPass, 0, wx.ALL, 5 )
+		
+		
+		bSizer6.Add( fgSizer3, 1, wx.EXPAND, 5 )
+		
+		self.m_staticline6 = wx.StaticLine( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.LI_HORIZONTAL )
+		bSizer6.Add( self.m_staticline6, 0, wx.EXPAND |wx.ALL, 5 )
+		
+		bSizer8 = wx.BoxSizer( wx.HORIZONTAL )
+		
+		self.btnSaveConfig = wx.Button( self, wx.ID_ANY, u"Save", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.btnSaveConfig.SetDefault() 
+		bSizer8.Add( self.btnSaveConfig, 0, wx.ALL, 5 )
+		
+		self.btnLoadConfig = wx.Button( self, wx.ID_ANY, u"Load", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer8.Add( self.btnLoadConfig, 0, wx.ALL, 5 )
+		
+		self.btnRemove = wx.Button( self, wx.ID_ANY, u"Remove", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer8.Add( self.btnRemove, 0, wx.ALL, 5 )
+		
+		
+		bSizer6.Add( bSizer8, 1, wx.EXPAND, 5 )
+		
+		
+		self.SetSizer( bSizer6 )
+		self.Layout()
+		
+		self.Centre( wx.BOTH )
+		
+		# Connect Events
+		self.chConfig.Bind( wx.EVT_COMBOBOX, self.OnConfigSelect )
+		self.chConfig.Bind( wx.EVT_TEXT_ENTER, self.OnConfigText )
+		self.btnSaveConfig.Bind( wx.EVT_BUTTON, self.OnSaveConfig )
+		self.btnLoadConfig.Bind( wx.EVT_BUTTON, self.OnLoadConfig )
+		self.btnRemove.Bind( wx.EVT_BUTTON, self.OnRemoveConfig )
+	
+	def __del__( self ):
+		pass
+	
+	
+	# Virtual event handlers, overide them in your derived class
+	def OnConfigSelect( self, event ):
+		event.Skip()
+	
+	def OnConfigText( self, event ):
+		event.Skip()
+	
+	def OnSaveConfig( self, event ):
+		event.Skip()
+	
+	def OnLoadConfig( self, event ):
+		event.Skip()
+	
+	def OnRemoveConfig( self, event ):
+		event.Skip()
 	
 

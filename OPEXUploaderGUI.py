@@ -6,8 +6,91 @@ import wx
 import subprocess
 from os.path import isdir, join, expanduser
 from os import access, R_OK, walk, mkdir
-from qbixnat.gui.noname import UploaderGUI, dlgScans
+from qbixnat.gui.noname import UploaderGUI, dlgScans,dlgConfig
 from configobj import ConfigObj
+
+class ConfigDialog(dlgConfig):
+    def __init__(self, parent):
+        super(ConfigDialog, self).__init__(parent)
+        self.config= None
+
+    def load(self, configfile):
+        if access(configfile,R_OK):
+            self.config = ConfigObj(configfile)
+            self.chConfig.Clear()
+            self.chConfig.AppendItems(self.config.keys())
+            self.txtURL.Clear()
+            self.txtUser.Clear()
+            self.txtPass.Clear()
+
+    def OnConfigText( self, event ):
+        """
+        Add new item
+        :param event:
+        :return:
+        """
+        if len(event.GetString()) > 0:
+            ref=event.GetString()
+            self.chConfig.AppendItems([ref])
+            self.config[ref]== {'URL': '', 'USER': '', 'PASS': ''}
+            self.txtURL.SetValue(self.config[ref]['URL'])
+            self.txtUser.SetValue(self.config[ref]['USER'])
+            self.txtPass.SetValue(self.config[ref]['PASS'])
+
+    def OnConfigSelect( self, event ):
+        """
+        Select config ref and load fields
+        :param event:
+        :return:
+        """
+        ref = self.chConfig.GetStringSelection()
+        if self.config is not None and ref in self.config.keys():
+            self.txtURL.SetValue(self.config[ref]['URL'])
+            self.txtUser.SetValue(self.config[ref]['USER'])
+            self.txtPass.SetValue(self.config[ref]['PASS'])
+
+    def OnLoadConfig( self, event ):
+        """
+        Load values from config file
+        :param event:
+        :return:
+        """
+        dlg = wx.FileDialog(self, "Choose a config file to load")
+        if dlg.ShowModal() == wx.ID_OK:
+            cfile = str(dlg.GetPath())
+            self.load(cfile)
+            print 'Config file loaded'
+        dlg.Destroy()
+
+    def OnSaveConfig( self, event ):
+        """
+        Save values to new or existing config
+        :param event:
+        :return:
+        """
+        if self.config is not None:
+            self.config = ConfigObj(join(expanduser('~'),'.xnat.cfg'))
+            url = self.txtURL.GetValue()
+            user = self.txtUser.GetValue()
+            passwd =self.txtPass.GetValue()
+            self.config[self.chConfig.GetValue()] = {'URL': url, 'USER': user, 'PASS': passwd}
+            self.config.write()
+            print 'Config file updated'
+
+        self.Close()
+
+    def OnRemoveConfig( self, event ):
+        """
+        Remove selected ref
+        :param event:
+        :return:
+        """
+        ref = self.chConfig.GetStringSelection()
+        if self.config is not None:
+            del self.config[ref]
+            self.config.write()
+            print 'Config setting removed'
+            self.load(configfile=self.config.filename)
 
 
 class OPEXUploaderGUI(UploaderGUI):
@@ -216,6 +299,22 @@ class OPEXUploaderGUI(UploaderGUI):
                     self.tcResults.AppendText(msg)
 
         dlg.Destroy()
+
+    def OnSettings(self, event):
+        """
+        Configure database connection
+        :param event:
+        :return:
+        """
+
+        home = expanduser('~')
+        configfile = join(home,'.xnat.cfg')
+        dlg = ConfigDialog(self)
+        dlg.load(configfile)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+
 
     def OnSelectData(self,event):
         """
