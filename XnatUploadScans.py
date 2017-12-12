@@ -289,10 +289,14 @@ if __name__ == "__main__":
     # get current user's login details (linux) or local file (windows)
     home = expanduser("~")
     configfile = join(home, '.xnat.cfg')
+    logfile = join(home,'logs','xnatuploadscans.log')
     if args.c is not None:
         try:
-            os.access(args.c, os.R_OK)
-            configfile = args.c
+            if os.access(args.c, os.R_OK):
+                configfile = args.c
+            if not os.access(join(home,'logs'), os.R_OK):
+                os.mkdir(join(home,'logs'))
+
         except:
             raise IOError
     try:
@@ -301,7 +305,7 @@ if __name__ == "__main__":
         raise os.error
         sys.exit(1)
 
-    logging.basicConfig(filename='xnatuploadscans.log', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
+    logging.basicConfig(filename=logfile, level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
     logging.info('Connected to Server:%s Project:%s', args.database, args.projectcode)
     xnat = XnatConnector(configfile, args.database)
     xnat.connect()

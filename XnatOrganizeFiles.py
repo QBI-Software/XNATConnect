@@ -10,7 +10,7 @@ Created on Thu Mar 2 2017
 """
 
 from os import listdir, R_OK, path, mkdir, access
-from os.path import isdir, join
+from os.path import isdir, join,expanduser
 import argparse
 import sys
 import re
@@ -19,7 +19,7 @@ import shutil
 import dicom
 from dicom.filereader import InvalidDicomError, read_file
 import logging
-logging.basicConfig(filename='xnatscans.log', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
+logging.basicConfig(filename=join(expanduser('~'),'logs','xnatscans.log'), level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
 
 if __name__ == "__main__":
     # Read dirlist until get to *.dcm or *.IMA

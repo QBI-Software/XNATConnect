@@ -7,8 +7,8 @@ import re
 import shutil
 import sys
 from datetime import date
-from os import R_OK, access, listdir
-from os.path import expanduser, isdir, join, basename
+from os import R_OK, access, listdir,getcwd
+from os.path import expanduser, isdir, join, basename, split
 
 import numpy as np
 import pandas
@@ -27,8 +27,11 @@ from qbixnat.dataparser.VisitParser import VisitParser
 
 class OPEXUploader():
     def __init__(self, args):
-        logging.basicConfig(filename='xnatupload.log', level=logging.INFO, format='%(asctime)s %(message)s',
-                            datefmt='%d-%m-%Y %I:%M:%S %p')
+        logfile=join(expanduser('~'),'logs','xnatupload.log')
+        logdir = split(logfile)[0]
+        if not os.access(logdir, os.R_OK):
+            os.mkdir(logdir)
+        logging.basicConfig(filename=logfile, level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%d-%m-%Y %I:%M:%S %p')
         self.args = args
         self.configfile = None
         self.xnat = None

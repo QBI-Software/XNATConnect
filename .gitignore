@@ -55,3 +55,6 @@ Temporary Items
 cache/*
 sampledata/*
 *.py~
+*.pyd
+build/*
+dist/*
