@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- 
 
 ###########################################################################
-## Python code generated with wxFormBuilder (version Dec 21 2016)
+## Python code generated with wxFormBuilder (version Jun 17 2015)
 ## http://www.wxformbuilder.org/
 ##
 ## PLEASE DO "NOT" EDIT THIS FILE!
@@ -17,7 +17,7 @@ import wx.xrc
 class UploaderGUI ( wx.Frame ):
 	
 	def __init__( self, parent ):
-		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"XNAT Uploader", pos = wx.DefaultPosition, size = wx.Size( 783,843 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"XNAT Uploader", pos = wx.DefaultPosition, size = wx.Size( 783,860 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
 		
 		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
 		self.SetBackgroundColour( wx.Colour( 244, 254, 255 ) )
@@ -26,7 +26,7 @@ class UploaderGUI ( wx.Frame ):
 		
 		self.m_staticText1 = wx.StaticText( self, wx.ID_ANY, u"Upload Data to XNAT", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText1.Wrap( -1 )
-		self.m_staticText1.SetFont( wx.Font( 12, wx.FONTFAMILY_DECORATIVE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, wx.EmptyString ) )
+		self.m_staticText1.SetFont( wx.Font( 12, 71, 90, 92, False, wx.EmptyString ) )
 		
 		bSizer1.Add( self.m_staticText1, 0, wx.ALL, 5 )
 		
@@ -225,7 +225,7 @@ class dlgScans ( wx.Dialog ):
 		
 		self.m_staticText13 = wx.StaticText( self, wx.ID_ANY, u"Organizes scans into the correct directory structure for XNAT uploads.  \n-  Input directory must contain *.IMA or *.DCM files.\n-  Ignore directory contains already uploaded scans (eg 'done')", wx.DefaultPosition, wx.Size( 600,60 ), 0|wx.SUNKEN_BORDER )
 		self.m_staticText13.Wrap( -1 )
-		self.m_staticText13.SetFont( wx.Font( wx.NORMAL_FONT.GetPointSize(), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, wx.EmptyString ) )
+		self.m_staticText13.SetFont( wx.Font( wx.NORMAL_FONT.GetPointSize(), 70, 90, 92, False, wx.EmptyString ) )
 		
 		bSizer5.Add( self.m_staticText13, 0, wx.ALL, 5 )
 		
@@ -293,7 +293,7 @@ class dlgScans ( wx.Dialog ):
 class dlgConfig ( wx.Dialog ):
 	
 	def __init__( self, parent ):
-		wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"Configuration Settings", pos = wx.DefaultPosition, size = wx.Size( 405,254 ), style = wx.DEFAULT_DIALOG_STYLE )
+		wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"Configuration Settings", pos = wx.DefaultPosition, size = wx.Size( 500,400 ), style = wx.DEFAULT_DIALOG_STYLE )
 		
 		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
 		
@@ -301,7 +301,7 @@ class dlgConfig ( wx.Dialog ):
 		
 		self.m_staticText12 = wx.StaticText( self, wx.ID_ANY, u"Database connection parameters", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText12.Wrap( -1 )
-		self.m_staticText12.SetFont( wx.Font( 14, wx.FONTFAMILY_DECORATIVE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, wx.EmptyString ) )
+		self.m_staticText12.SetFont( wx.Font( 14, 71, 90, 90, False, wx.EmptyString ) )
 		
 		bSizer6.Add( self.m_staticText12, 0, wx.ALL, 5 )
 		

@@ -44,7 +44,7 @@
             <property name="minimum_size"></property>
             <property name="name">UploaderGUI</property>
             <property name="pos"></property>
-            <property name="size">783,843</property>
+            <property name="size">783,860</property>
             <property name="style">wxDEFAULT_FRAME_STYLE</property>
             <property name="subclass"></property>
             <property name="title">XNAT Uploader</property>
@@ -769,8 +769,6 @@
                                 <property name="window_style"></property>
                                 <event name="OnChar"></event>
                                 <event name="OnCombobox">OnSelectData</event>
-                                <event name="OnComboboxCloseup"></event>
-                                <event name="OnComboboxDropdown"></event>
                                 <event name="OnEnterWindow"></event>
                                 <event name="OnEraseBackground"></event>
                                 <event name="OnKeyDown"></event>
@@ -3548,7 +3546,7 @@
             <property name="minimum_size"></property>
             <property name="name">dlgConfig</property>
             <property name="pos"></property>
-            <property name="size">405,254</property>
+            <property name="size">500,400</property>
             <property name="style">wxDEFAULT_DIALOG_STYLE</property>
             <property name="subclass"></property>
             <property name="title">Configuration Settings</property>
@@ -3844,8 +3842,6 @@
                                 <property name="window_style"></property>
                                 <event name="OnChar"></event>
                                 <event name="OnCombobox">OnConfigSelect</event>
-                                <event name="OnComboboxCloseup"></event>
-                                <event name="OnComboboxDropdown"></event>
                                 <event name="OnEnterWindow"></event>
                                 <event name="OnEraseBackground"></event>
                                 <event name="OnKeyDown"></event>

@@ -100,6 +100,8 @@ class OPEXUploaderGUI(UploaderGUI):
         :param parent:
         """
         super(OPEXUploaderGUI, self).__init__(parent)
+        self.SetTitle("XNAT Connector App")
+        self.SetSize((850, 850))
         self.runoptions = self.__loadOptions()
         self.configfile = join(expanduser('~'), '.xnat.cfg')
         self.loaded = self.__loadConfig()
@@ -306,7 +308,6 @@ class OPEXUploaderGUI(UploaderGUI):
         :param event:
         :return:
         """
-
         home = expanduser('~')
         configfile = join(home,'.xnat.cfg')
         dlg = ConfigDialog(self)
@@ -323,9 +324,9 @@ class OPEXUploaderGUI(UploaderGUI):
         :return:
         """
         if self.chOptions.GetStringSelection() != 'Select data':
-            self.btnRun.enable(True)
+            self.btnRun.Enable(True)
         else:
-            self.btnRun.enable(False)
+            self.btnRun.Enable(False)
 
     def OnSubmit(self,event):
         """
