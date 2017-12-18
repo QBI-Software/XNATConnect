@@ -1,7 +1,7 @@
 import logging
 import sys
 from datetime import datetime
-from os import environ, access, R_OK
+from os import environ, access, R_OK, getcwd
 from os.path import expanduser, join
 
 import dash
@@ -79,7 +79,8 @@ class OPEXReportApp(object):
                 subjects = xnat.getSubjectsDataframe(self.project)
                 msg = "Loaded %d subjects from %s : %s" % (len(subjects), self.database, self.project)
                 logging.info(msg)
-                report = OPEXReport(subjects=subjects,csvfile=csv,opexfile=join(self.resources,'opex.csv'))
+                report = OPEXReport(subjects=subjects,csvfile=csv,opexfile=join(getcwd()
+, self.resources,'opex.csv'))
                 report.xnat = xnat
                 # Generate dataframes for display
                 self.df_participants = report.getParticipants()

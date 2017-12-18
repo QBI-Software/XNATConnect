@@ -320,6 +320,79 @@ class OPEXUploader():
                 print("Finished")
                 return csvfile
 
+    def runDataUpload(self, projectcode,inputdir,datatype, fields=None):
+        """
+        Data upload template
+        :param projectcode:
+        :param inputdir:
+        :param kwargs:
+        :return: success or error
+        """
+        print("Input:", inputdir)
+        project = self.xnat.get_project(projectcode)
+        if access(inputdir, R_OK):
+            if datatype == 'cantab':
+                seriespattern = '*.csv'
+                sheet = 0
+                files = glob.glob(join(inputdir, seriespattern))
+                print("Files:", len(files))
+                for f2 in files:
+                    if ("RowBySession" in f2):
+                        print "Loading: ", f2
+                        dp = CantabParser(fields, f2, sheet)
+                        (missing, matches) = self.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = self.outputChecks(projectcode, matches, missing, inputdir, f2)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
+            elif datatype == 'amunet':
+                sheet = 0
+                topinputdir = inputdir
+                basedatesfile = 'amunet_participantdates.csv'
+                seriespattern = '*.xlsx'
+                print("Input:", topinputdir)
+                subdirs = listdir(topinputdir)
+                for inputdir in subdirs:
+                    if inputdir not in ['0m', '3m', '6m', '9m', '12m']:
+                        continue
+                    interval = inputdir[0]
+                    inputdir = join(topinputdir, inputdir)
+                    # Get dates from zip files
+                    dates_uri_file = join(inputdir, 'folderpath.txt')
+                    with open(dates_uri_file, "r") as dd:
+                        content = dd.readlines()
+                        for line in content:
+                            dates_uri = line.strip()
+                            break
+                    if len(dates_uri) <= 0:
+                        raise ValueError('No dates file found - exiting')
+                    dates_csv = self.generateAmunetdates(dates_uri, basedatesfile, interval)
+                    # copy file to this dir
+                    shutil.copyfile(dates_csv, join(inputdir, basename(dates_csv)))
+                    # Get xls files
+                    files = glob.glob(join(inputdir, seriespattern))
+                    print("Files:", len(files))
+                    for f2 in files:
+                        print("Loading", f2)
+                        dp = AmunetParser(f2, sheet)
+                        dp.interval = interval
+                        (missing, matches) = self.uploadData(project, dp)
+                        # Output matches and missing
+                        if len(matches) > 0 or len(missing) > 0:
+                            (out1, out2) = self.outputChecks(projectcode, matches, missing, inputdir, f2)
+                            msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                            print(msg)
+                            logging.info(msg)
+
+
+
+        else:
+            msg = "Input directory error: %s" % inputdir
+            logging.error(msg)
+            raise IOError(msg)
+
 
 ########################################################################
 if __name__ == "__main__":
@@ -401,35 +474,34 @@ if __name__ == "__main__":
                 else:
                     msg = "Directory path cannot be found: %s" % uploaddir
                     raise IOError(msg)
-                    #########################################################################################################
+
+    #########################################################################################################
             # Upload CANTAB data from directory
             if (uploader.args.cantab is not None and uploader.args.cantab):
-                sheet = "RowBySession_HealthyBrains"
-                inputdir = uploader.args.cantab
                 fields = uploader.args.fields
                 if fields is None or len(fields) <= 0:
-                    fields = 'cantab_fields.csv'
+                    fields = os.path.join(getcwd(), "resources", 'cantab_fields.csv')
 
-                cantabfields = os.path.join("resources", fields)
-                print("Input:", inputdir)
-                if access(inputdir, R_OK):
-                    seriespattern = '*.csv'
-                    files = glob.glob(join(inputdir, seriespattern))
-                    print("Files:", len(files))
-                    project = uploader.xnat.get_project(projectcode)
-                    for f2 in files:
-                        if ("RowBySession" in f2):
-                            print "Loading: ", f2
-                            dp = CantabParser(cantabfields, f2, sheet)
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
-                else:
-                    raise IOError("Input dir error")
+                uploader.runDataUpload(projectcode, uploader.args.cantab,'cantab', fields)
+                # print("Input:", inputdir)
+                # if access(inputdir, R_OK):
+                #     seriespattern = '*.csv'
+                #     files = glob.glob(join(inputdir, seriespattern))
+                #     print("Files:", len(files))
+                #     project = uploader.xnat.get_project(projectcode)
+                #     for f2 in files:
+                #         if ("RowBySession" in f2):
+                #             print "Loading: ", f2
+                #             dp = CantabParser(cantabfields, f2, sheet)
+                #             (missing, matches) = uploader.uploadData(project, dp)
+                #             # Output matches and missing
+                #             if len(matches) > 0 or len(missing) > 0:
+                #                 (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                #                 msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                #                 print(msg)
+                #                 logging.info(msg)
+                # else:
+                #     raise IOError("Input dir error")
 
                 #########################################################################################################
             ### Upload Amunet data from directory
@@ -438,53 +510,55 @@ if __name__ == "__main__":
             # Dates are generated separately below from the raw folders - path given in "folderpath.txt"
             # csv files with dates should be placed in the same directory to be loaded with sortSubjects
             if (uploader.args.amunet is not None and uploader.args.amunet):
-                sheet = 0
-                topinputdir = uploader.args.amunet
-                basedatesfile = 'amunet_participantdates.csv'
-                seriespattern = '*.xlsx'
-                print("Input:", topinputdir)
-                if access(topinputdir, R_OK):
-                    subdirs = listdir(topinputdir)
-                    for inputdir in subdirs:
-                        if inputdir not in ['0m', '3m', '6m', '9m', '12m']:
-                            continue
-                        interval = inputdir[0]
-                        inputdir = join(topinputdir, inputdir)
-                        # Get dates from zip files
-                        dates_uri_file = join(inputdir, 'folderpath.txt')
-                        with open(dates_uri_file, "r") as dd:
-                            content = dd.readlines()
-                            for line in content:
-                                dates_uri = line.strip()
-                                break
-                        if len(dates_uri) <= 0:
-                            raise ValueError('No dates file found - exiting')
-                        dates_csv = uploader.generateAmunetdates(dates_uri, basedatesfile, interval)
-                        # copy file to this dir
-                        shutil.copyfile(dates_csv, join(inputdir, basename(dates_csv)))
-                        # Get xls files
-                        files = glob.glob(join(inputdir, seriespattern))
-                        print("Files:", len(files))
-                        project = uploader.xnat.get_project(projectcode)
-                        for f2 in files:
-                            print("Loading", f2)
-                            dp = AmunetParser(f2, sheet)
-                            # dp.extractDateInfo(uploader.args.amunetpath)
-                            dp.interval = interval
-                            (missing, matches) = uploader.uploadData(project, dp)
-                            # Output matches and missing
-                            if len(matches) > 0 or len(missing) > 0:
-                                (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
-                                msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
-                                print(msg)
-                                logging.info(msg)
-                else:
-                    raise IOError("Input dir error")
+                uploader.runDataUpload(projectcode, uploader.args.amunet, 'amunet')
+
+                # sheet = 0
+                # topinputdir = uploader.args.amunet
+                # basedatesfile = 'amunet_participantdates.csv'
+                # seriespattern = '*.xlsx'
+                # print("Input:", topinputdir)
+                # if access(topinputdir, R_OK):
+                #     subdirs = listdir(topinputdir)
+                #     for inputdir in subdirs:
+                #         if inputdir not in ['0m', '3m', '6m', '9m', '12m']:
+                #             continue
+                #         interval = inputdir[0]
+                #         inputdir = join(topinputdir, inputdir)
+                #         # Get dates from zip files
+                #         dates_uri_file = join(inputdir, 'folderpath.txt')
+                #         with open(dates_uri_file, "r") as dd:
+                #             content = dd.readlines()
+                #             for line in content:
+                #                 dates_uri = line.strip()
+                #                 break
+                #         if len(dates_uri) <= 0:
+                #             raise ValueError('No dates file found - exiting')
+                #         dates_csv = uploader.generateAmunetdates(dates_uri, basedatesfile, interval)
+                #         # copy file to this dir
+                #         shutil.copyfile(dates_csv, join(inputdir, basename(dates_csv)))
+                #         # Get xls files
+                #         files = glob.glob(join(inputdir, seriespattern))
+                #         print("Files:", len(files))
+                #         project = uploader.xnat.get_project(projectcode)
+                #         for f2 in files:
+                #             print("Loading", f2)
+                #             dp = AmunetParser(f2, sheet)
+                #             # dp.extractDateInfo(uploader.args.amunetpath)
+                #             dp.interval = interval
+                #             (missing, matches) = uploader.uploadData(project, dp)
+                #             # Output matches and missing
+                #             if len(matches) > 0 or len(missing) > 0:
+                #                 (out1, out2) = uploader.outputChecks(projectcode, matches, missing, inputdir, f2)
+                #                 msg = "Reports created: \n\t%s\n\t%s" % (out1, out2)
+                #                 print(msg)
+                #                 logging.info(msg)
+                # else:
+                #     raise IOError("Input dir error")
                     #########################################################################################################                       ## Amunet dates only
-            if (uploader.args.amunetdates is not None and uploader.args.amunetdates):
-                dirpath = uploader.args.amunetdates
-                basedatesfile = 'amunet_participantdates.csv'
-                uploader.generateAmunetdates(dirpath, basedatesfile, interval)
+            # if (uploader.args.amunetdates is not None and uploader.args.amunetdates):
+            #     dirpath = uploader.args.amunetdates
+            #     basedatesfile = 'amunet_participantdates.csv'
+            #     uploader.generateAmunetdates(dirpath, basedatesfile, interval)
 
             #########################################################################################################
             ### Upload ACE-R data from directory
@@ -517,9 +591,9 @@ if __name__ == "__main__":
                 sheet = "1"
                 inputdir = uploader.args.mridata
                 if uploader.args.fields is not None:
-                    mrifields = os.path.join("resources", uploader.args.fields)
+                    mrifields = os.path.join(getcwd(),"resources", uploader.args.fields)
                 else:
-                    mrifields = os.path.join("resources", "MRI_fields.csv")
+                    mrifields = os.path.join(getcwd(),"resources", "MRI_fields.csv")
                 msg = "MRIdata Input: %s" % inputdir
                 logging.info(msg)
                 if access(inputdir, R_OK):
@@ -577,9 +651,9 @@ if __name__ == "__main__":
                 msg = "DEXA Input: %s" % inputdir
                 logging.info(msg)
                 if uploader.args.fields is not None:
-                    fields = os.path.join("resources", uploader.args.fields)
+                    fields = os.path.join(getcwd(),"resources", uploader.args.fields)
                 else:
-                    fields = os.path.join("resources", "dexa_fields.xlsx")
+                    fields = os.path.join(getcwd(),"resources", "dexa_fields.xlsx")
                 if access(inputdir, R_OK):
                     seriespattern = 'DXA Data entry*.xlsx'
                     files = glob.glob(join(inputdir, seriespattern))
@@ -606,9 +680,9 @@ if __name__ == "__main__":
                 msg = "COSMED Input: %s" % inputdir
                 logging.info(msg)
                 if uploader.args.fields is not None:
-                    fields = os.path.join("resources", uploader.args.fields)
+                    fields = os.path.join(getcwd(),"resources", uploader.args.fields)
                 else:
-                    fields = os.path.join("resources", "cosmed_fields.xlsx")
+                    fields = os.path.join(getcwd(),"resources", "cosmed_fields.xlsx")
                 if access(inputdir, R_OK):
                     project = uploader.xnat.get_project(projectcode)
                     dp = CosmedParser(inputdir, inputsubdir, datafile, fields)

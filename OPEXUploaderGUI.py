@@ -7,7 +7,10 @@ import subprocess
 from os.path import isdir, join, expanduser
 from os import access, R_OK, walk, mkdir
 from qbixnat.gui.noname import UploaderGUI, dlgScans,dlgConfig
+from OPEXUploader import OPEXUploader
 from configobj import ConfigObj
+from requests.exceptions import ConnectionError
+import argparse
 
 class ConfigDialog(dlgConfig):
     def __init__(self, parent):
@@ -92,6 +95,12 @@ class ConfigDialog(dlgConfig):
             print 'Config setting removed'
             self.load(configfile=self.config.filename)
 
+class LogOutput():
+    def __init__(self,aWxTextCtrl):
+        self.out = aWxTextCtrl
+
+    def write(self, string):
+        self.out.WriteText(string)
 
 class OPEXUploaderGUI(UploaderGUI):
     def __init__(self, parent):
@@ -107,6 +116,10 @@ class OPEXUploaderGUI(UploaderGUI):
         self.loaded = self.__loadConfig()
         if self.loaded:
             self.chOptions.SetItems(self.runoptions.keys())
+        redir = LogOutput(self.tcResults)
+        sys.stdout = redir
+        sys.stderr = redir
+        #print 'test'
         self.Show()
 
     def __loadConfig(self):
@@ -253,12 +266,14 @@ class OPEXUploaderGUI(UploaderGUI):
         dlg = wx.DirDialog(self, "Choose a directory containing input files")
         if dlg.ShowModal() == wx.ID_OK:
             self.dirname = '"{0}"'.format(dlg.GetPath())
+            self.dirname = dlg.GetPath()
             #self.StatusBar.SetStatusText("Loaded: %s\n" % self.dirname)
             self.inputedit.SetValue(self.dirname)
         dlg.Destroy()
 
     def OnEditDirname(self, event):
         self.dirname = '"{0}"'.format(event.GetString())
+        self.dirname = event.GetString()
         #self.StatusBar.SetStatusText("Input dir: %s\n" % self.dirname)
 
     def OnDownload( self, event ):
@@ -330,7 +345,61 @@ class OPEXUploaderGUI(UploaderGUI):
 
     def OnSubmit(self,event):
         """
-        Run OPEX Uploader with args
+        Run OPEX Uploader
+        :param event:
+        :return:
+        """
+        self.tcResults.Clear()
+        runoption = self.runoptions.get(self.chOptions.GetValue())[2:]
+
+        (db, proj) = self.__loadConnection()
+        if self.dirname is None or len(self.dirname) <=0:
+            dlg = wx.MessageDialog(self, "Data directory not specified", "OPEX Uploader", wx.OK)
+            dlg.ShowModal()  # Show it
+            dlg.Destroy()
+        else:
+            #Load uploader args
+            args = argparse.ArgumentParser(prog='OPEX Uploader')
+            args.config=join(expanduser('~'), '.xnat.cfg')
+            args.database = db
+            args.projectcode = proj
+            args.create = self.cbCreateSubject.GetValue()
+            args.skiprows =self.cbSkiprows.GetValue()
+            args.checks = self.cbChecks.GetValue()
+            args.update = self.cbUpdate.GetValue()
+
+            uploader = OPEXUploader(args)
+            uploader.config()
+            uploader.xnatconnect()
+            logging.info('Connecting to Server:%s Project:%s', uploader.args.database, uploader.args.projectcode)
+
+            try:
+                if uploader.xnat.testconnection():
+                    logging.info("...Connected")
+                    print("Connected")
+                if runoption == 'cantab':
+                    fields = os.path.join(os.getcwd(), "resources", 'cantab_fields.csv')
+                    uploader.runDataUpload(proj, self.dirname, runoption,fields)
+            except IOError as e:
+                logging.error(e)
+                print "Failed IO:", e
+            except ConnectionError as e:
+                logging.error(e)
+                print "Failed connection:", e
+            except ValueError as e:
+                logging.error(e)
+                print "ValueError:", e
+            except Exception as e:
+                logging.error(e)
+                print "ERROR:", e
+            finally:  # Processing complete
+                uploader.xnatdisconnect()
+                logging.info("FINISHED")
+                print("FINISHED - see xnatupload.log for details")
+
+    def OnSubmitCmd(self,event):
+        """
+        Run OPEX Uploader with args - via commandline
         :return: return code shown in status
         """
         self.tcResults.Clear()
